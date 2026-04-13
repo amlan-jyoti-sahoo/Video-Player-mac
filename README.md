@@ -51,9 +51,11 @@ Packaged outputs will be generated in the `dist/` folder.
 
 
 ## upcoming feature
--> add a navbar preview image with timing
+-> add a  preview image with in video progress bar with timing like in netflix
 -> preview video length
 -> if single video it there no need for preview
 -> background need
 -> listview and grid preview 
 -> i button for getinfo
+-> f for full screen
+-> right side of the folder name total duaration of the all videos
