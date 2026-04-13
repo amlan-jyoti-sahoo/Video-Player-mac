@@ -1,0 +1,40 @@
+{
+  "name": "local-video-player-mac",
+  "version": "1.0.0",
+  "description": "Simple local video player desktop app for macOS",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac"
+  },
+  "keywords": [
+    "electron",
+    "video-player",
+    "macos"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.2.1",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.localvideoplayer.app",
+    "productName": "Local Video Player",
+    "files": [
+      "index.html",
+      "styles.css",
+      "script.js",
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.video"
+    }
+  }
+}

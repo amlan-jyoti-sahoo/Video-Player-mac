@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Local Video Player</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="player-card">
+        <h1>Local Video Player</h1>
+        <p class="hint">
+          Space: play/pause | Left/Right arrow: seek -10s/+10s
+        </p>
+
+        <div class="picker-row">
+          <button id="openNative" type="button">Open Video</button>
+          <button id="openFolder" type="button">Open Folder</button>
+          <span class="picker-label">or choose a local video:</span>
+          <input id="videoFile" type="file" accept="video/*" multiple />
+        </div>
+
+        <section class="playlist-wrap" aria-label="Video list">
+          <div id="playlist" class="playlist"></div>
+        </section>
+
+        <video id="video" controls preload="metadata"></video>
+
+        <p id="status" class="status">Select a video file to start.</p>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
