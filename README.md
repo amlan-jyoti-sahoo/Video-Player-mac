@@ -48,3 +48,12 @@ Packaged outputs will be generated in the `dist/` folder.
 
 - Keyboard shortcuts work when focus is not inside a text input.
 - The app runs locally on your machine.
+
+
+## upcoming feature
+-> add a navbar preview image with timing
+-> preview video length
+-> if single video it there no need for preview
+-> background need
+-> listview and grid preview 
+-> i button for getinfo
