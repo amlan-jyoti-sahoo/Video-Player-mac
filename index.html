@@ -10,9 +10,6 @@
     <main class="app">
       <section class="player-card">
         <h1>Local Video Player</h1>
-        <p class="hint">
-          Space: play/pause | Left/Right arrow: seek -10s/+10s
-        </p>
 
         <div class="picker-row">
           <button id="openNative" type="button">Open Video</button>
@@ -22,6 +19,7 @@
         </div>
 
         <section class="playlist-wrap" aria-label="Video list">
+          <p id="sourceLabel" class="source-label"></p>
           <div id="playlist" class="playlist"></div>
         </section>
 

@@ -1,6 +1,7 @@
 const fileInput = document.getElementById("videoFile");
 const openNativeButton = document.getElementById("openNative");
 const openFolderButton = document.getElementById("openFolder");
+const sourceLabel = document.getElementById("sourceLabel");
 const playlistElement = document.getElementById("playlist");
 const video = document.getElementById("video");
 const statusText = document.getElementById("status");
@@ -9,6 +10,7 @@ let ownedObjectUrl = null;
 let playlist = [];
 let selectedIndex = -1;
 let thumbnailGenerationId = 0;
+let currentSourceName = "";
 
 function revokePlaylistObjectUrls(items) {
   for (const item of items) {
@@ -34,6 +36,10 @@ function setVideoSource(url, label, nextOwnedObjectUrl = null) {
   statusText.textContent = `Loaded: ${label}`;
 }
 
+function updateSourceLabel() {
+  sourceLabel.textContent = currentSourceName ? `Folder: ${currentSourceName}` : "";
+}
+
 function escapeHtml(rawValue) {
   return String(rawValue)
     .replaceAll("&", "&amp;")
@@ -45,12 +51,25 @@ function escapeHtml(rawValue) {
 
 function updatePlaylistSelectionUI() {
   const cards = playlistElement.querySelectorAll(".playlist-item");
+  let selectedCard = null;
 
   for (const card of cards) {
     const index = Number(card.dataset.index);
     const isSelected = index === selectedIndex;
     card.classList.toggle("selected", isSelected);
     card.setAttribute("aria-selected", String(isSelected));
+
+    if (isSelected) {
+      selectedCard = card;
+    }
+  }
+
+  if (selectedCard) {
+    selectedCard.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center"
+    });
   }
 }
 
@@ -90,6 +109,7 @@ function renderPlaylist() {
     button.dataset.index = String(index);
     button.setAttribute("role", "option");
     button.setAttribute("aria-selected", String(index === selectedIndex));
+    button.title = item.fileName;
 
     const thumbnailHtml = item.thumbnail
       ? `<img class="playlist-thumb" src="${item.thumbnail}" alt="Preview of ${escapeHtml(item.fileName)}" />`
@@ -97,7 +117,7 @@ function renderPlaylist() {
 
     button.innerHTML = `
       ${thumbnailHtml}
-      <span class="playlist-name" title="${escapeHtml(item.fileName)}">${escapeHtml(item.fileName)}</span>
+      <span class="playlist-name">${escapeHtml(item.fileName)}</span>
     `;
 
     button.addEventListener("click", () => {
@@ -224,14 +244,18 @@ async function buildThumbnails() {
   }
 }
 
-function setPlaylist(items) {
+function setPlaylist(items, sourceName = "") {
   if (!Array.isArray(items) || items.length === 0) {
+    currentSourceName = sourceName;
+    updateSourceLabel();
     statusText.textContent = "No supported videos were found.";
     return;
   }
 
   revokePlaylistObjectUrls(playlist);
   playlist = items.map((item) => ({ ...item, thumbnail: null }));
+  currentSourceName = sourceName;
+  updateSourceLabel();
   selectedIndex = -1;
   renderPlaylist();
   selectVideo(0);
@@ -265,6 +289,8 @@ fileInput.addEventListener("change", () => {
     const nextObjectUrl = URL.createObjectURL(file);
     revokePlaylistObjectUrls(playlist);
     playlist = [];
+    currentSourceName = "";
+    updateSourceLabel();
     selectedIndex = -1;
     renderPlaylist();
     setVideoSource(nextObjectUrl, file.name, nextObjectUrl);
@@ -277,7 +303,7 @@ fileInput.addEventListener("change", () => {
     ownedObjectUrl: true
   }));
 
-  setPlaylist(filePlaylist);
+  setPlaylist(filePlaylist, "");
   if (playlist[0]?.videoUrl && playlist[0].ownedObjectUrl) {
     ownedObjectUrl = playlist[0].videoUrl;
   }
@@ -295,7 +321,7 @@ openNativeButton.addEventListener("click", async () => {
     return;
   }
 
-  setPlaylist([result]);
+  setPlaylist([result], "");
 });
 
 openFolderButton.addEventListener("click", async () => {
@@ -304,14 +330,15 @@ openFolderButton.addEventListener("click", async () => {
     return;
   }
 
-  const items = await window.electronAPI.openVideoFolderDialog();
+  const result = await window.electronAPI.openVideoFolderDialog();
+  const items = result?.items ?? [];
 
-  if (!items || items.length === 0) {
+  if (items.length === 0) {
     statusText.textContent = "No videos found in that folder.";
     return;
   }
 
-  setPlaylist(items);
+  setPlaylist(items, result?.sourceName ?? "");
 });
 
 window.addEventListener("dragover", (event) => {
@@ -340,8 +367,8 @@ window.addEventListener("drop", async (event) => {
     return;
   }
 
-  const items = await window.electronAPI.resolveDroppedPaths(droppedPaths);
-  setPlaylist(items);
+  const result = await window.electronAPI.resolveDroppedPaths(droppedPaths);
+  setPlaylist(result?.items ?? [], result?.sourceName ?? "");
 });
 
 window.addEventListener("keydown", (event) => {

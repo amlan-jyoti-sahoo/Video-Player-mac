@@ -138,18 +138,40 @@ ipcMain.handle("pick-video-folder", async () => {
   });
 
   if (result.canceled || result.filePaths.length === 0) {
-    return [];
+    return { items: [], sourceName: "" };
   }
 
-  return normalizePathsToVideoItems([result.filePaths[0]]);
+  const folderPath = result.filePaths[0];
+  const items = await normalizePathsToVideoItems([folderPath]);
+  return { items, sourceName: path.basename(folderPath) };
 });
 
 ipcMain.handle("resolve-video-paths", async (_event, paths = []) => {
   if (!Array.isArray(paths) || paths.length === 0) {
-    return [];
+    return { items: [], sourceName: "" };
   }
 
-  return normalizePathsToVideoItems(paths);
+  const folderNames = [];
+
+  for (const inputPath of paths) {
+    try {
+      const stats = await fs.stat(inputPath);
+      if (stats.isDirectory()) {
+        folderNames.push(path.basename(inputPath));
+      }
+    } catch {
+      // Ignore inaccessible or removed paths.
+    }
+  }
+
+  const sourceName = folderNames.length === 1
+    ? folderNames[0]
+    : folderNames.length > 1
+      ? "Multiple folders"
+      : "";
+
+  const items = await normalizePathsToVideoItems(paths);
+  return { items, sourceName };
 });
 
 app.whenReady().then(() => {
