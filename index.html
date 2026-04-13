@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div id="dynamicBackdrop" class="dynamic-backdrop" aria-hidden="true"></div>
     <main class="app">
       <section class="player-card">
         <h1>Local Video Player</h1>
@@ -19,15 +20,45 @@
         </div>
 
         <section class="playlist-wrap" aria-label="Video list">
-          <p id="sourceLabel" class="source-label"></p>
+          <div class="source-row">
+            <p id="sourceLabel" class="source-label"></p>
+            <p id="sourceDuration" class="source-duration"></p>
+          </div>
+          <div class="view-toggle" role="group" aria-label="Preview layout">
+            <button id="viewList" type="button" class="view-toggle-btn selected">List</button>
+            <button id="viewGrid" type="button" class="view-toggle-btn">Grid</button>
+          </div>
           <div id="playlist" class="playlist"></div>
         </section>
 
-        <video id="video" controls preload="metadata"></video>
+        <section id="playerShell" class="player-shell" aria-label="Main player">
+          <video id="video" controls preload="metadata"></video>
+          <div id="timeline" class="timeline" aria-label="Seek timeline">
+            <div id="timelineProgress" class="timeline-progress"></div>
+            <div id="timelinePreview" class="timeline-preview" hidden>
+              <img id="timelinePreviewImage" alt="Timeline preview" />
+              <p id="timelinePreviewTime" class="timeline-preview-time">00:00</p>
+            </div>
+          </div>
+          <div class="player-quick-actions">
+            <button id="infoButton" class="info-btn" type="button" aria-label="Get video info">
+              i Info
+            </button>
+            <span class="quick-hint">Space play/pause | ← → seek | F fullscreen | I info</span>
+          </div>
+        </section>
 
         <p id="status" class="status">Select a video file to start.</p>
       </section>
     </main>
+
+    <dialog id="infoDialog" class="info-dialog">
+      <h2>Video Info</h2>
+      <p id="infoContent" class="info-content"></p>
+      <form method="dialog">
+        <button type="submit">Close</button>
+      </form>
+    </dialog>
 
     <script src="script.js"></script>
   </body>
