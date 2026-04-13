@@ -2,6 +2,8 @@ const openNativeButton = document.getElementById("openNative");
 const openFolderButton = document.getElementById("openFolder");
 const playlistSidebar = document.getElementById("playlistSidebar");
 const sidebarToggleButton = document.getElementById("sidebarToggle");
+const sidebarResizer = document.getElementById("sidebarResizer");
+const layoutShell = document.querySelector(".layout-shell");
 const sourceLabel = document.getElementById("sourceLabel");
 const sourceDurationLabel = document.getElementById("sourceDuration");
 const playlistWrap = document.querySelector(".playlist-wrap");
@@ -411,7 +413,7 @@ function setPlaylist(items, sourceName = "") {
   renderPlaylist();
   updateSourceLabels();
   selectVideo(0);
-  statusText.textContent = `Loaded ${playlist.length} video${playlist.length === 1 ? "" : "s"}.`;
+  statusText.textContent = "";
   buildPlaylistPreviewData();
 }
 
@@ -492,13 +494,30 @@ function hideSpeedUi() {
 function updateFullscreenIcon() {
   const isFullscreen = Boolean(document.fullscreenElement);
   if (isFullscreen) {
-    fullscreenIcon.innerHTML = "<path d=\"M9 3H3v6M15 3h6v6M21 15v6h-6M3 15v6h6\" />";
+    fullscreenIcon.innerHTML = "<path d=\"M9 3v6H3M15 3v6h6M21 15h-6v6M3 15h6v6\" />";
     fullscreenToggleButton.setAttribute("aria-label", "Minimize video");
     return;
   }
 
-  fullscreenIcon.innerHTML = "<path d=\"M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5\" />";
+  fullscreenIcon.innerHTML = "<path d=\"M3 9V3h6M15 3h6v6M21 15v6h-6M9 21H3v-6\" />";
   fullscreenToggleButton.setAttribute("aria-label", "Maximize video");
+}
+
+async function togglePictureInPicture() {
+  if (!video?.src || !document.pictureInPictureEnabled) {
+    return;
+  }
+
+  try {
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture();
+      return;
+    }
+
+    await video.requestPictureInPicture();
+  } catch {
+    statusText.textContent = "Unable to enter Picture-in-Picture mode.";
+  }
 }
 
 function togglePlayPause() {
@@ -614,6 +633,19 @@ function toggleSidebar() {
   const nextCollapsed = !playlistSidebar.classList.contains("collapsed");
   playlistSidebar.classList.toggle("collapsed", nextCollapsed);
   sidebarToggleButton?.setAttribute("aria-expanded", String(!nextCollapsed));
+
+  if (nextCollapsed) {
+    // Save current width before collapsing, clear inline style so collapsed overrides work
+    playlistSidebar.dataset.widthBeforeCollapse = playlistSidebar.style.width || "";
+    playlistSidebar.style.width = "";
+  } else {
+    // Restore user-dragged width if any
+    const saved = playlistSidebar.dataset.widthBeforeCollapse;
+    if (saved) {
+      playlistSidebar.style.width = saved;
+    }
+  }
+
   if (sidebarToggleButton) {
     sidebarToggleButton.innerHTML = `<span aria-hidden="true">${nextCollapsed ? "&#10095;" : "&#10094;"}</span>`;
   }
@@ -714,6 +746,10 @@ playPauseButton.addEventListener("click", (event) => {
 
 fullscreenToggleButton.addEventListener("click", () => {
   toggleFullscreen();
+});
+
+pipButton?.addEventListener("click", () => {
+  togglePictureInPicture();
 });
 
 video.addEventListener("click", () => {
@@ -940,3 +976,49 @@ updateSpeedButton();
 updateSidebarVisibility();
 updatePlayPauseIcon();
 updateFullscreenIcon();
+
+// Sidebar drag-resize
+(function initSidebarResize() {
+  if (!sidebarResizer || !playlistSidebar || !layoutShell) {
+    return;
+  }
+
+  let isDragging = false;
+  let startX = 0;
+  let startWidth = 0;
+  const MIN_WIDTH = 180;
+  const MAX_WIDTH = 520;
+
+  sidebarResizer.addEventListener("mousedown", (event) => {
+    if (playlistSidebar.classList.contains("collapsed")) {
+      return;
+    }
+
+    isDragging = true;
+    startX = event.clientX;
+    startWidth = playlistSidebar.getBoundingClientRect().width;
+    layoutShell.classList.add("resizing");
+    sidebarResizer.classList.add("dragging");
+    event.preventDefault();
+  });
+
+  window.addEventListener("mousemove", (event) => {
+    if (!isDragging) {
+      return;
+    }
+
+    const delta = event.clientX - startX;
+    const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + delta));
+    playlistSidebar.style.width = `${next}px`;
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!isDragging) {
+      return;
+    }
+
+    isDragging = false;
+    layoutShell.classList.remove("resizing");
+    sidebarResizer.classList.remove("dragging");
+  });
+}());

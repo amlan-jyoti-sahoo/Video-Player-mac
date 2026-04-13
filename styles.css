@@ -79,30 +79,68 @@ body::before {
   display: flex;
   height: 100%;
   min-height: 0;
-  gap: 12px;
+  gap: 0;
 }
 
 .playlist-sidebar {
   width: min(36vw, 360px);
-  min-width: 285px;
+  min-width: 180px;
+  max-width: 520px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.05);
   padding: 10px;
-  transition: width 220ms ease, min-width 220ms ease, padding 220ms ease;
+  transition: padding 220ms ease;
   min-height: 0;
+  flex-shrink: 0;
 }
 
 .playlist-sidebar.hidden {
   display: none;
 }
 
+.sidebar-resizer {
+  width: 8px;
+  min-width: 8px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-resizer::after {
+  content: "";
+  display: block;
+  width: 2px;
+  height: 40px;
+  background: var(--border);
+  border-radius: 2px;
+  transition: background 150ms ease;
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer.dragging::after {
+  background: var(--accent);
+}
+
+.playlist-sidebar.hidden + .sidebar-resizer {
+  display: none;
+}
+
+.layout-shell.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
 .playlist-sidebar.collapsed {
-  width: 58px;
-  min-width: 58px;
+  width: 58px !important;
+  min-width: 58px !important;
   padding: 10px 8px;
 }
 
@@ -386,13 +424,13 @@ h1 {
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--border);
-  background: #000;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 video {
   width: 100%;
   height: 100%;
-  background: #000;
+  background: transparent;
   object-fit: contain;
 }
 
