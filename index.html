@@ -10,45 +10,100 @@
     <div id="dynamicBackdrop" class="dynamic-backdrop" aria-hidden="true"></div>
     <main class="app">
       <section class="player-card">
-        <h1>Local Video Player</h1>
-
-        <div class="picker-row">
-          <button id="openNative" type="button">Open Video</button>
-          <button id="openFolder" type="button">Open Folder</button>
-          <span class="picker-label">or choose a local video:</span>
-          <input id="videoFile" type="file" accept="video/*" multiple />
-        </div>
-
-        <section class="playlist-wrap" aria-label="Video list">
-          <div class="source-row">
-            <p id="sourceLabel" class="source-label"></p>
-            <p id="sourceDuration" class="source-duration"></p>
-          </div>
-          <div class="view-toggle" role="group" aria-label="Preview layout">
-            <button id="viewList" type="button" class="view-toggle-btn selected">List</button>
-            <button id="viewGrid" type="button" class="view-toggle-btn">Grid</button>
-          </div>
-          <div id="playlist" class="playlist"></div>
-        </section>
-
-        <section id="playerShell" class="player-shell" aria-label="Main player">
-          <video id="video" controls preload="metadata"></video>
-          <div id="timeline" class="timeline" aria-label="Seek timeline">
-            <div id="timelineProgress" class="timeline-progress"></div>
-            <div id="timelinePreview" class="timeline-preview" hidden>
-              <img id="timelinePreviewImage" alt="Timeline preview" />
-              <p id="timelinePreviewTime" class="timeline-preview-time">00:00</p>
+        <div class="layout-shell">
+          <section id="playlistSidebar" class="playlist-sidebar" aria-label="Video list panel">
+            <div class="sidebar-head">
+              <h1>Local Video Player</h1>
+              <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-expanded="true" aria-label="Collapse video list">
+                <span aria-hidden="true">&#10094;</span>
+              </button>
             </div>
-          </div>
-          <div class="player-quick-actions">
-            <button id="infoButton" class="info-btn" type="button" aria-label="Get video info">
-              i Info
-            </button>
-            <span class="quick-hint">Space play/pause | ← → seek | F fullscreen | I info</span>
-          </div>
-        </section>
+            <div class="playlist-wrap" aria-label="Video list">
+              <div class="source-row">
+                <p id="sourceLabel" class="source-label"></p>
+                <p id="sourceDuration" class="source-duration"></p>
+              </div>
+              <div class="view-toggle" role="group" aria-label="Preview layout">
+                <button id="viewGrid" type="button" class="view-toggle-btn selected">Grid</button>
+                <button id="viewList" type="button" class="view-toggle-btn">List</button>
+              </div>
+              <div id="playlist" class="playlist"></div>
+            </div>
+          </section>
 
-        <p id="status" class="status">Select a video file to start.</p>
+          <section class="main-panel">
+            <div class="picker-row">
+              <button id="openNative" type="button">Open Video</button>
+              <button id="openFolder" type="button">Open Folder</button>
+              <span class="drop-label">Drag and drop a video file or folder here</span>
+            </div>
+
+            <div class="now-playing-row">
+              <p id="currentFileName" class="current-file-name">No file selected</p>
+              <button id="infoButton" class="info-btn" type="button" aria-label="Get video info">i</button>
+            </div>
+
+            <section id="playerShell" class="player-shell" aria-label="Main player">
+              <div class="video-stage">
+                <video id="video" preload="metadata"></video>
+
+                <div id="overlayControls" class="overlay-controls">
+                  <div class="overlay-top-row">
+                    <button id="timeModeButton" class="time-chip" type="button" aria-label="Toggle time display">00:00 / 00:00</button>
+                    <div class="overlay-actions">
+                      <div class="speed-wrap">
+                        <button id="speedButton" class="speed-btn" type="button" aria-haspopup="true" aria-expanded="false">1x</button>
+                        <div id="speedPopover" class="speed-popover" hidden>
+                          <div id="speedMenu" class="speed-menu">
+                            <button data-speed="0.5" type="button" class="speed-option">0.5x</button>
+                            <button data-speed="0.75" type="button" class="speed-option">0.75x</button>
+                            <button data-speed="1" type="button" class="speed-option selected">1x</button>
+                            <button data-speed="1.5" type="button" class="speed-option">1.5x</button>
+                            <button data-speed="2" type="button" class="speed-option">2x</button>
+                            <button id="customSpeedButton" type="button" class="speed-option">Custom</button>
+                          </div>
+
+                          <div id="customSpeedInputWrap" class="custom-speed-wrap" hidden>
+                            <input id="customSpeedInput" type="number" min="0.25" max="4" step="0.25" placeholder="e.g. 1.25" />
+                            <button id="applyCustomSpeed" type="button">Set</button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button id="fullscreenToggleButton" class="overlay-icon-btn" type="button" aria-label="Toggle maximize">
+                        <svg id="fullscreenIcon" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="timeline-row">
+                    <button id="playPauseButton" class="play-pause-btn" type="button" aria-label="Play or pause video">
+                      <svg id="playPauseIcon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </button>
+
+                    <div id="timeline" class="timeline" aria-label="Seek timeline">
+                      <div id="timelineProgress" class="timeline-progress"></div>
+                      <div id="timelinePreview" class="timeline-preview" hidden>
+                        <img id="timelinePreviewImage" alt="Timeline preview" />
+                        <p id="timelinePreviewTime" class="timeline-preview-time">00:00</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="player-quick-actions">
+                <span class="quick-hint">Space play/pause | ← → seek | F fullscreen | I info</span>
+              </div>
+            </section>
+
+            <p id="status" class="status">Select a video file to start.</p>
+          </section>
+        </div>
       </section>
     </main>
 

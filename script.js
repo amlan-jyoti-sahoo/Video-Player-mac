@@ -1,6 +1,7 @@
-const fileInput = document.getElementById("videoFile");
 const openNativeButton = document.getElementById("openNative");
 const openFolderButton = document.getElementById("openFolder");
+const playlistSidebar = document.getElementById("playlistSidebar");
+const sidebarToggleButton = document.getElementById("sidebarToggle");
 const sourceLabel = document.getElementById("sourceLabel");
 const sourceDurationLabel = document.getElementById("sourceDuration");
 const playlistWrap = document.querySelector(".playlist-wrap");
@@ -9,23 +10,40 @@ const viewListButton = document.getElementById("viewList");
 const viewGridButton = document.getElementById("viewGrid");
 const playerShell = document.getElementById("playerShell");
 const video = document.getElementById("video");
+const overlayControls = document.getElementById("overlayControls");
 const timeline = document.getElementById("timeline");
 const timelineProgress = document.getElementById("timelineProgress");
 const timelinePreview = document.getElementById("timelinePreview");
 const timelinePreviewImage = document.getElementById("timelinePreviewImage");
 const timelinePreviewTime = document.getElementById("timelinePreviewTime");
+const timeModeButton = document.getElementById("timeModeButton");
+const playPauseButton = document.getElementById("playPauseButton");
+const playPauseIcon = document.getElementById("playPauseIcon");
+const speedButton = document.getElementById("speedButton");
+const speedPopover = document.getElementById("speedPopover");
+const speedMenu = document.getElementById("speedMenu");
+const customSpeedButton = document.getElementById("customSpeedButton");
+const customSpeedInputWrap = document.getElementById("customSpeedInputWrap");
+const customSpeedInput = document.getElementById("customSpeedInput");
+const applyCustomSpeedButton = document.getElementById("applyCustomSpeed");
+const fullscreenToggleButton = document.getElementById("fullscreenToggleButton");
+const fullscreenIcon = document.getElementById("fullscreenIcon");
+const currentFileNameLabel = document.getElementById("currentFileName");
 const infoButton = document.getElementById("infoButton");
 const infoDialog = document.getElementById("infoDialog");
 const infoContent = document.getElementById("infoContent");
 const dynamicBackdrop = document.getElementById("dynamicBackdrop");
 const statusText = document.getElementById("status");
+const videoStage = document.querySelector(".video-stage");
 
 let standaloneObjectUrl = null;
 let playlist = [];
 let selectedIndex = -1;
 let previewGenerationId = 0;
 let currentSourceName = "";
-let playlistView = "list";
+let playlistView = "grid";
+let timeDisplayMode = "watched";
+const SPEED_STEPS = [0.5, 0.75, 1, 1.5, 2];
 let hoverPreviewVideo = null;
 let hoverPreviewRequestId = 0;
 let lastHoverCaptureTime = 0;
@@ -78,6 +96,7 @@ function clearStandaloneObjectUrl() {
 function setVideoSource(url, label) {
   video.src = url;
   video.load();
+  currentFileNameLabel.textContent = label;
   statusText.textContent = `Loaded: ${label}`;
 }
 
@@ -120,6 +139,10 @@ function applyBackdrop(imageUrl) {
 function refreshViewToggleButtons() {
   viewListButton.classList.toggle("selected", playlistView === "list");
   viewGridButton.classList.toggle("selected", playlistView === "grid");
+}
+
+function updateSidebarVisibility() {
+  playlistSidebar?.classList.toggle("hidden", playlist.length === 0);
 }
 
 function updatePlaylistSelectionUI() {
@@ -178,9 +201,11 @@ function selectVideo(index) {
 
 function renderPlaylist() {
   playlistElement.innerHTML = "";
+  playlistElement.classList.toggle("list", playlistView === "list");
   playlistElement.classList.toggle("grid", playlistView === "grid");
   playlistWrap.classList.toggle("single", playlist.length <= 1);
   refreshViewToggleButtons();
+  updateSidebarVisibility();
 
   if (playlist.length === 0) {
     return;
@@ -197,19 +222,29 @@ function renderPlaylist() {
     button.setAttribute("aria-selected", String(index === selectedIndex));
     button.title = item.fileName;
 
-    const durationBadge = Number.isFinite(item.duration)
-      ? `<span class="playlist-duration">${formatDuration(item.duration)}</span>`
-      : "";
+    if (playlistView === "list") {
+      const durationText = Number.isFinite(item.duration)
+        ? formatDuration(item.duration)
+        : "--:--";
+      button.innerHTML = `
+        <span class="playlist-name">${escapeHtml(item.fileName)}</span>
+        <span class="playlist-duration">${durationText}</span>
+      `;
+    } else {
+      const durationBadge = Number.isFinite(item.duration)
+        ? `<span class="playlist-duration">${formatDuration(item.duration)}</span>`
+        : "";
 
-    const thumbnailHtml = item.thumbnail
-      ? `<img class="playlist-thumb" src="${item.thumbnail}" alt="Preview of ${escapeHtml(item.fileName)}" />`
-      : `<div class="playlist-thumb placeholder">No preview</div>`;
+      const thumbnailHtml = item.thumbnail
+        ? `<img class="playlist-thumb" src="${item.thumbnail}" alt="Preview of ${escapeHtml(item.fileName)}" />`
+        : `<div class="playlist-thumb placeholder">No preview</div>`;
 
-    button.innerHTML = `
-      ${durationBadge}
-      ${thumbnailHtml}
-      <span class="playlist-name">${escapeHtml(item.fileName)}</span>
-    `;
+      button.innerHTML = `
+        ${durationBadge}
+        ${thumbnailHtml}
+        <span class="playlist-name">${escapeHtml(item.fileName)}</span>
+      `;
+    }
 
     button.addEventListener("click", () => {
       selectVideo(index);
@@ -365,6 +400,7 @@ function setPlaylist(items, sourceName = "") {
     updateSourceLabels();
     statusText.textContent = "No supported videos were found.";
     applyBackdrop(null);
+    currentFileNameLabel.textContent = "No file selected";
     return;
   }
 
@@ -393,6 +429,7 @@ function setSingleFileMode(file) {
   setVideoSource(objectUrl, file.name);
   ensureHoverPreviewVideo(objectUrl);
   applyBackdrop(null);
+  updateTimelineProgress();
 }
 
 function getDroppedPaths(event) {
@@ -412,11 +449,88 @@ function getDroppedPaths(event) {
 function updateTimelineProgress() {
   if (!Number.isFinite(video.duration) || video.duration <= 0) {
     timelineProgress.style.width = "0%";
+    timeModeButton.textContent = "00:00 / 00:00";
     return;
   }
 
   const ratio = clamp(video.currentTime / video.duration, 0, 1);
   timelineProgress.style.width = `${ratio * 100}%`;
+  const watchedText = formatDuration(video.currentTime);
+  const totalText = formatDuration(video.duration);
+  const remaining = Math.max(0, video.duration - video.currentTime);
+  const leftText = timeDisplayMode === "watched" ? watchedText : `-${formatDuration(remaining)}`;
+  timeModeButton.textContent = `${leftText} / ${totalText}`;
+}
+
+function updateSpeedButton() {
+  speedButton.textContent = `${video.playbackRate}x`;
+
+  const options = [...document.querySelectorAll(".speed-option[data-speed]")];
+  options.forEach((option) => {
+    const speedValue = Number(option.dataset.speed);
+    option.classList.toggle("selected", Math.abs(speedValue - video.playbackRate) < 0.001);
+  });
+}
+
+function updatePlayPauseIcon() {
+  if (video.paused) {
+    playPauseIcon.innerHTML = "<path d=\"M8 5v14l11-7z\" />";
+    playPauseButton.setAttribute("aria-label", "Play video");
+  } else {
+    playPauseIcon.innerHTML = "<path d=\"M6 5h4v14H6zM14 5h4v14h-4z\" />";
+    playPauseButton.setAttribute("aria-label", "Pause video");
+  }
+}
+
+function hideSpeedUi() {
+  speedPopover.hidden = true;
+  speedMenu.hidden = false;
+  customSpeedInputWrap.hidden = true;
+  speedButton.setAttribute("aria-expanded", "false");
+}
+
+function updateFullscreenIcon() {
+  const isFullscreen = Boolean(document.fullscreenElement);
+  if (isFullscreen) {
+    fullscreenIcon.innerHTML = "<path d=\"M9 3H3v6M15 3h6v6M21 15v6h-6M3 15v6h6\" />";
+    fullscreenToggleButton.setAttribute("aria-label", "Minimize video");
+    return;
+  }
+
+  fullscreenIcon.innerHTML = "<path d=\"M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5\" />";
+  fullscreenToggleButton.setAttribute("aria-label", "Maximize video");
+}
+
+function togglePlayPause() {
+  if (!video.src) {
+    return;
+  }
+
+  if (video.paused) {
+    video.play().catch(() => {
+      statusText.textContent = "Unable to play video.";
+    });
+    return;
+  }
+
+  video.pause();
+}
+
+function applyPlaybackRate(speed) {
+  const numeric = Number(speed);
+  if (!Number.isFinite(numeric)) {
+    return;
+  }
+
+  const next = clamp(numeric, 0.25, 4);
+  video.playbackRate = Math.round(next * 100) / 100;
+  updateSpeedButton();
+}
+
+function changePlaybackByStep(direction) {
+  const next = clamp(video.playbackRate + (0.25 * direction), 0.25, 4);
+  applyPlaybackRate(next);
+  statusText.textContent = `Playback speed: ${video.playbackRate}x`;
 }
 
 function getTimelinePointerTime(event) {
@@ -492,6 +606,19 @@ function toggleFullscreen() {
   });
 }
 
+function toggleSidebar() {
+  if (!playlistSidebar) {
+    return;
+  }
+
+  const nextCollapsed = !playlistSidebar.classList.contains("collapsed");
+  playlistSidebar.classList.toggle("collapsed", nextCollapsed);
+  sidebarToggleButton?.setAttribute("aria-expanded", String(!nextCollapsed));
+  if (sidebarToggleButton) {
+    sidebarToggleButton.innerHTML = `<span aria-hidden="true">${nextCollapsed ? "&#10095;" : "&#10094;"}</span>`;
+  }
+}
+
 function openInfoDialog() {
   const selected = playlist[selectedIndex] || null;
   const knownDurations = getKnownDurations();
@@ -535,6 +662,78 @@ infoButton.addEventListener("click", () => {
   openInfoDialog();
 });
 
+timeModeButton.addEventListener("click", () => {
+  timeDisplayMode = timeDisplayMode === "watched" ? "remaining" : "watched";
+  updateTimelineProgress();
+});
+
+speedButton.addEventListener("click", () => {
+  const isOpen = !speedPopover.hidden;
+  speedPopover.hidden = isOpen;
+  speedMenu.hidden = false;
+  customSpeedInputWrap.hidden = true;
+  speedButton.setAttribute("aria-expanded", String(!isOpen));
+});
+
+speedMenu.addEventListener("click", (event) => {
+  const button = event.target.closest(".speed-option[data-speed]");
+  if (!button) {
+    return;
+  }
+
+  const speedValue = Number(button.dataset.speed);
+  if (Number.isFinite(speedValue)) {
+    applyPlaybackRate(speedValue);
+    statusText.textContent = `Playback speed: ${video.playbackRate}x`;
+    hideSpeedUi();
+  }
+});
+
+customSpeedButton.addEventListener("click", () => {
+  speedMenu.hidden = true;
+  customSpeedInputWrap.hidden = false;
+  customSpeedInput.value = String(video.playbackRate);
+  customSpeedInput.focus();
+});
+
+applyCustomSpeedButton.addEventListener("click", () => {
+  const customValue = Number(customSpeedInput.value);
+  if (!Number.isFinite(customValue)) {
+    return;
+  }
+
+  applyPlaybackRate(customValue);
+  statusText.textContent = `Playback speed: ${video.playbackRate}x`;
+  hideSpeedUi();
+});
+
+playPauseButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  togglePlayPause();
+});
+
+fullscreenToggleButton.addEventListener("click", () => {
+  toggleFullscreen();
+});
+
+video.addEventListener("click", () => {
+  togglePlayPause();
+});
+
+overlayControls.addEventListener("click", (event) => {
+  event.stopPropagation();
+});
+
+document.addEventListener("click", (event) => {
+  if (!speedPopover.hidden && !event.target.closest(".speed-wrap")) {
+    hideSpeedUi();
+  }
+});
+
+sidebarToggleButton?.addEventListener("click", () => {
+  toggleSidebar();
+});
+
 timeline.addEventListener("mousemove", (event) => {
   if (!Number.isFinite(video.duration) || video.duration <= 0) {
     return;
@@ -563,37 +762,22 @@ timeline.addEventListener("click", (event) => {
 
 video.addEventListener("timeupdate", () => {
   updateTimelineProgress();
+  updatePlayPauseIcon();
+});
+
+video.addEventListener("durationchange", () => {
+  updateTimelineProgress();
 });
 
 video.addEventListener("loadedmetadata", () => {
   updateTimelineProgress();
+  updatePlayPauseIcon();
 
   if (selectedIndex >= 0 && playlist[selectedIndex]) {
     playlist[selectedIndex].duration = video.duration;
     updatePlaylistCard(selectedIndex);
     updateSourceLabels();
   }
-});
-
-fileInput.addEventListener("change", () => {
-  const files = [...(fileInput.files ?? [])];
-
-  if (files.length === 0) {
-    return;
-  }
-
-  if (files.length === 1) {
-    setSingleFileMode(files[0]);
-    return;
-  }
-
-  const filePlaylist = files.map((file) => ({
-    fileName: file.name,
-    videoUrl: URL.createObjectURL(file),
-    ownedObjectUrl: true
-  }));
-
-  setPlaylist(filePlaylist, "");
 });
 
 openNativeButton.addEventListener("click", async () => {
@@ -711,6 +895,18 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (event.shiftKey && event.key === ">") {
+    event.preventDefault();
+    changePlaybackByStep(1);
+    return;
+  }
+
+  if (event.shiftKey && event.key === "<") {
+    event.preventDefault();
+    changePlaybackByStep(-1);
+    return;
+  }
+
   if (event.key.toLowerCase() === "i") {
     event.preventDefault();
     openInfoDialog();
@@ -724,10 +920,23 @@ window.addEventListener("beforeunload", () => {
 
 video.addEventListener("ended", () => {
   statusText.textContent = "Playback ended.";
+  updatePlayPauseIcon();
 });
 
-window.addEventListener("beforeunload", () => {
-  revokePlaylistObjectUrls(playlist);
-
-  clearObjectUrl();
+video.addEventListener("play", () => {
+  updatePlayPauseIcon();
 });
+
+video.addEventListener("pause", () => {
+  updatePlayPauseIcon();
+});
+
+document.addEventListener("fullscreenchange", () => {
+  updateFullscreenIcon();
+});
+
+updateTimelineProgress();
+updateSpeedButton();
+updateSidebarVisibility();
+updatePlayPauseIcon();
+updateFullscreenIcon();
