@@ -21,6 +21,9 @@ const timelinePreviewTime = document.getElementById("timelinePreviewTime");
 const timeModeButton = document.getElementById("timeModeButton");
 const playPauseButton = document.getElementById("playPauseButton");
 const playPauseIcon = document.getElementById("playPauseIcon");
+const pipButton = document.getElementById("pipButton");
+const controlsLockButton = document.getElementById("controlsLockButton");
+const controlsLockIcon = document.getElementById("controlsLockIcon");
 const speedButton = document.getElementById("speedButton");
 const speedPopover = document.getElementById("speedPopover");
 const speedMenu = document.getElementById("speedMenu");
@@ -30,6 +33,9 @@ const customSpeedInput = document.getElementById("customSpeedInput");
 const applyCustomSpeedButton = document.getElementById("applyCustomSpeed");
 const fullscreenToggleButton = document.getElementById("fullscreenToggleButton");
 const fullscreenIcon = document.getElementById("fullscreenIcon");
+const fullscreenNavZone = document.getElementById("fullscreenNavZone");
+const prevVideoButton = document.getElementById("prevVideoButton");
+const nextVideoButton = document.getElementById("nextVideoButton");
 const currentFileNameLabel = document.getElementById("currentFileName");
 const infoButton = document.getElementById("infoButton");
 const infoDialog = document.getElementById("infoDialog");
@@ -49,6 +55,12 @@ const SPEED_STEPS = [0.5, 0.75, 1, 1.5, 2];
 let hoverPreviewVideo = null;
 let hoverPreviewRequestId = 0;
 let lastHoverCaptureTime = 0;
+let controlsLocked = false;
+let controlsHideTimer = 0;
+const PLAYLIST_PREVIEW_WIDTH = 640;
+const PLAYLIST_PREVIEW_HEIGHT = 360;
+const TIMELINE_PREVIEW_CAPTURE_WIDTH = 640;
+const TIMELINE_PREVIEW_CAPTURE_HEIGHT = 360;
 
 function escapeHtml(rawValue) {
   return String(rawValue)
@@ -95,11 +107,70 @@ function clearStandaloneObjectUrl() {
   }
 }
 
+function clearControlsHideTimer() {
+  if (!controlsHideTimer) {
+    return;
+  }
+
+  window.clearTimeout(controlsHideTimer);
+  controlsHideTimer = 0;
+}
+
+function updateControlsLockButton() {
+  controlsLockButton?.setAttribute("aria-pressed", String(controlsLocked));
+  controlsLockButton?.setAttribute(
+    "aria-label",
+    controlsLocked ? "Allow controls to auto hide" : "Keep controls visible"
+  );
+  controlsLockButton?.classList.toggle("active", controlsLocked);
+
+  if (controlsLockIcon) {
+    controlsLockIcon.innerHTML = "<path d=\"M4 7h16\" /><path d=\"M7 12h10\" /><path d=\"M10 17h4\" /><circle cx=\"16\" cy=\"7\" r=\"2\" /><circle cx=\"8\" cy=\"12\" r=\"2\" /><circle cx=\"14\" cy=\"17\" r=\"2\" />";
+  }
+}
+
+function shouldAutoHideControls() {
+  return Boolean(video.src) && !controlsLocked && speedPopover.hidden;
+}
+
+function setControlsVisible(visible) {
+  videoStage?.classList.toggle("controls-hidden", !visible);
+}
+
+function scheduleControlsHide() {
+  clearControlsHideTimer();
+
+  if (!shouldAutoHideControls()) {
+    setControlsVisible(true);
+    return;
+  }
+
+  controlsHideTimer = window.setTimeout(() => {
+    if (!shouldAutoHideControls()) {
+      return;
+    }
+
+    setControlsVisible(false);
+    timelinePreview.hidden = true;
+  }, 2000);
+}
+
+function showControls() {
+  setControlsVisible(true);
+  scheduleControlsHide();
+}
+
 function setVideoSource(url, label) {
   video.src = url;
   video.load();
+  video.defaultPlaybackRate = 1;
+  video.playbackRate = 1;
+  updateSpeedButton();
+  hideSpeedUi();
+  customSpeedInput.value = "1";
   currentFileNameLabel.textContent = label;
   statusText.textContent = `Loaded: ${label}`;
+  showControls();
 }
 
 function getKnownDurations() {
@@ -147,6 +218,43 @@ function updateSidebarVisibility() {
   playlistSidebar?.classList.toggle("hidden", playlist.length === 0);
 }
 
+function updateFullscreenNavigation() {
+  const hasPlaylist = playlist.length > 1;
+  const isFullscreen = document.fullscreenElement === playerShell;
+  playerShell?.classList.toggle("is-fullscreen", isFullscreen);
+  videoStage?.classList.toggle("has-playlist-nav", hasPlaylist);
+  videoStage?.classList.toggle("fullscreen-nav-prev-visible", false);
+  videoStage?.classList.toggle("fullscreen-nav-next-visible", false);
+  fullscreenNavZone?.setAttribute("aria-hidden", String(!(isFullscreen && hasPlaylist)));
+
+  const prevIndex = selectedIndex > 0 ? selectedIndex - 1 : -1;
+  const nextIndex = selectedIndex >= 0 && selectedIndex < playlist.length - 1
+    ? selectedIndex + 1
+    : -1;
+
+  if (prevVideoButton) {
+    prevVideoButton.disabled = prevIndex < 0;
+  }
+
+  if (nextVideoButton) {
+    nextVideoButton.disabled = nextIndex < 0;
+  }
+}
+
+function drawVideoFrameContain(context, videoElement, width, height) {
+  const sourceWidth = videoElement.videoWidth || width;
+  const sourceHeight = videoElement.videoHeight || height;
+  const fitRatio = Math.min(width / sourceWidth, height / sourceHeight);
+  const drawWidth = Math.max(1, Math.round(sourceWidth * fitRatio));
+  const drawHeight = Math.max(1, Math.round(sourceHeight * fitRatio));
+  const offsetX = Math.round((width - drawWidth) / 2);
+  const offsetY = Math.round((height - drawHeight) / 2);
+
+  context.fillStyle = "#000";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(videoElement, offsetX, offsetY, drawWidth, drawHeight);
+}
+
 function updatePlaylistSelectionUI() {
   const cards = playlistElement.querySelectorAll(".playlist-item");
   let selectedCard = null;
@@ -182,7 +290,7 @@ function ensureHoverPreviewVideo(url) {
   hoverPreviewVideo.load();
 }
 
-function selectVideo(index) {
+function selectVideo(index, { autoplay = false } = {}) {
   if (index < 0 || index >= playlist.length) {
     return;
   }
@@ -193,11 +301,18 @@ function selectVideo(index) {
   const selected = playlist[index];
   setVideoSource(selected.videoUrl, selected.fileName);
   updatePlaylistSelectionUI();
+  updateFullscreenNavigation();
   ensureHoverPreviewVideo(selected.videoUrl);
 
   if (selected.thumbnail) {
     applyBackdrop(selected.thumbnail);
     timelinePreviewImage.src = selected.thumbnail;
+  }
+
+  if (autoplay) {
+    video.play().catch(() => {
+      statusText.textContent = "Unable to play video.";
+    });
   }
 }
 
@@ -300,8 +415,8 @@ function capturePreviewImage(videoElement, width, height) {
     return null;
   }
 
-  context.drawImage(videoElement, 0, 0, width, height);
-  return canvas.toDataURL("image/jpeg", 0.72);
+  drawVideoFrameContain(context, videoElement, width, height);
+  return canvas.toDataURL("image/jpeg", 0.92);
 }
 
 function createPreviewData(videoUrl) {
@@ -336,19 +451,19 @@ function createPreviewData(videoUrl) {
       const preferredSeek = clamp(duration * 0.24, 0, Math.max(0, Math.min(duration - 0.2, 10)));
 
       if (preferredSeek <= 0.1) {
-        finish(capturePreviewImage(tempVideo, 240, 135));
+        finish(capturePreviewImage(tempVideo, PLAYLIST_PREVIEW_WIDTH, PLAYLIST_PREVIEW_HEIGHT));
         return;
       }
 
       try {
         tempVideo.currentTime = preferredSeek;
       } catch {
-        finish(capturePreviewImage(tempVideo, 240, 135));
+        finish(capturePreviewImage(tempVideo, PLAYLIST_PREVIEW_WIDTH, PLAYLIST_PREVIEW_HEIGHT));
       }
     }, { once: true });
 
     tempVideo.addEventListener("seeked", () => {
-      finish(capturePreviewImage(tempVideo, 240, 135));
+      finish(capturePreviewImage(tempVideo, PLAYLIST_PREVIEW_WIDTH, PLAYLIST_PREVIEW_HEIGHT));
     }, { once: true });
   });
 }
@@ -400,6 +515,7 @@ function setPlaylist(items, sourceName = "") {
     currentSourceName = sourceName;
     renderPlaylist();
     updateSourceLabels();
+    updateFullscreenNavigation();
     statusText.textContent = "No supported videos were found.";
     applyBackdrop(null);
     currentFileNameLabel.textContent = "No file selected";
@@ -413,6 +529,7 @@ function setPlaylist(items, sourceName = "") {
   renderPlaylist();
   updateSourceLabels();
   selectVideo(0);
+  updateFullscreenNavigation();
   statusText.textContent = "";
   buildPlaylistPreviewData();
 }
@@ -432,6 +549,20 @@ function setSingleFileMode(file) {
   ensureHoverPreviewVideo(objectUrl);
   applyBackdrop(null);
   updateTimelineProgress();
+  updateFullscreenNavigation();
+}
+
+function goToAdjacentVideo(direction) {
+  if (playlist.length <= 1 || selectedIndex < 0) {
+    return;
+  }
+
+  const nextIndex = selectedIndex + direction;
+  if (nextIndex < 0 || nextIndex >= playlist.length) {
+    return;
+  }
+
+  selectVideo(nextIndex, { autoplay: !video.paused && Boolean(video.src) });
 }
 
 function getDroppedPaths(event) {
@@ -465,12 +596,13 @@ function updateTimelineProgress() {
 }
 
 function updateSpeedButton() {
-  speedButton.textContent = `${video.playbackRate}x`;
+  const displayRate = Number.isFinite(video.playbackRate) ? video.playbackRate : 1;
+  speedButton.textContent = `${displayRate}x`;
 
   const options = [...document.querySelectorAll(".speed-option[data-speed]")];
   options.forEach((option) => {
     const speedValue = Number(option.dataset.speed);
-    option.classList.toggle("selected", Math.abs(speedValue - video.playbackRate) < 0.001);
+    option.classList.toggle("selected", Math.abs(speedValue - displayRate) < 0.001);
   });
 }
 
@@ -489,6 +621,7 @@ function hideSpeedUi() {
   speedMenu.hidden = false;
   customSpeedInputWrap.hidden = true;
   speedButton.setAttribute("aria-expanded", "false");
+  scheduleControlsHide();
 }
 
 function updateFullscreenIcon() {
@@ -525,6 +658,8 @@ function togglePlayPause() {
     return;
   }
 
+  showControls();
+
   if (video.paused) {
     video.play().catch(() => {
       statusText.textContent = "Unable to play video.";
@@ -550,6 +685,7 @@ function changePlaybackByStep(direction) {
   const next = clamp(video.playbackRate + (0.25 * direction), 0.25, 4);
   applyPlaybackRate(next);
   statusText.textContent = `Playback speed: ${video.playbackRate}x`;
+  showControls();
 }
 
 function getTimelinePointerTime(event) {
@@ -590,7 +726,11 @@ function setTimelinePreviewImageAt(time) {
         return;
       }
 
-      const image = capturePreviewImage(sourceVideo, 220, 124);
+      const image = capturePreviewImage(
+        sourceVideo,
+        TIMELINE_PREVIEW_CAPTURE_WIDTH,
+        TIMELINE_PREVIEW_CAPTURE_HEIGHT
+      );
       if (image) {
         timelinePreviewImage.src = image;
       }
@@ -652,6 +792,8 @@ function toggleSidebar() {
 }
 
 function openInfoDialog() {
+  showControls();
+
   const selected = playlist[selectedIndex] || null;
   const knownDurations = getKnownDurations();
   const folderTotal = knownDurations.length > 0
@@ -705,6 +847,13 @@ speedButton.addEventListener("click", () => {
   speedMenu.hidden = false;
   customSpeedInputWrap.hidden = true;
   speedButton.setAttribute("aria-expanded", String(!isOpen));
+  showControls();
+});
+
+controlsLockButton?.addEventListener("click", () => {
+  controlsLocked = !controlsLocked;
+  updateControlsLockButton();
+  showControls();
 });
 
 speedMenu.addEventListener("click", (event) => {
@@ -726,6 +875,7 @@ customSpeedButton.addEventListener("click", () => {
   customSpeedInputWrap.hidden = false;
   customSpeedInput.value = String(video.playbackRate);
   customSpeedInput.focus();
+  showControls();
 });
 
 applyCustomSpeedButton.addEventListener("click", () => {
@@ -748,8 +898,21 @@ fullscreenToggleButton.addEventListener("click", () => {
   toggleFullscreen();
 });
 
+prevVideoButton?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  goToAdjacentVideo(-1);
+  showControls();
+});
+
+nextVideoButton?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  goToAdjacentVideo(1);
+  showControls();
+});
+
 pipButton?.addEventListener("click", () => {
   togglePictureInPicture();
+  showControls();
 });
 
 video.addEventListener("click", () => {
@@ -758,6 +921,38 @@ video.addEventListener("click", () => {
 
 overlayControls.addEventListener("click", (event) => {
   event.stopPropagation();
+});
+
+videoStage?.addEventListener("mousemove", () => {
+  showControls();
+});
+
+videoStage?.addEventListener("mousemove", (event) => {
+  const rect = videoStage.getBoundingClientRect();
+  const offsetX = event.clientX - rect.left;
+  const offsetY = event.clientY - rect.top;
+  const navBandHeight = Math.min(400, rect.height);
+  const bandTop = (rect.height - navBandHeight) / 2;
+  const isInVerticalBand = offsetY >= bandTop && offsetY <= bandTop + navBandHeight;
+  const isFullscreenPlaylist = document.fullscreenElement === playerShell && playlist.length > 1;
+  const showPrev = isFullscreenPlaylist && isInVerticalBand && offsetX >= 0 && offsetX <= 100;
+  const showNext = isFullscreenPlaylist && isInVerticalBand && offsetX >= rect.width - 100 && offsetX <= rect.width;
+
+  videoStage.classList.toggle("fullscreen-nav-prev-visible", showPrev);
+  videoStage.classList.toggle("fullscreen-nav-next-visible", showNext);
+});
+
+videoStage?.addEventListener("mouseleave", () => {
+  videoStage.classList.remove("fullscreen-nav-prev-visible");
+  videoStage.classList.remove("fullscreen-nav-next-visible");
+  if (!controlsLocked && speedPopover.hidden) {
+    setControlsVisible(false);
+    clearControlsHideTimer();
+  }
+});
+
+videoStage?.addEventListener("focusin", () => {
+  showControls();
 });
 
 document.addEventListener("click", (event) => {
@@ -775,7 +970,9 @@ timeline.addEventListener("mousemove", (event) => {
     return;
   }
 
+  showControls();
   const { pointerX, time } = getTimelinePointerTime(event);
+  timelinePreview.classList.add("expanded");
   timelinePreview.hidden = false;
   timelinePreview.style.left = `${pointerX}px`;
   timelinePreviewTime.textContent = formatDuration(time);
@@ -783,6 +980,7 @@ timeline.addEventListener("mousemove", (event) => {
 });
 
 timeline.addEventListener("mouseleave", () => {
+  timelinePreview.classList.remove("expanded");
   timelinePreview.hidden = true;
 });
 
@@ -791,6 +989,7 @@ timeline.addEventListener("click", (event) => {
     return;
   }
 
+  showControls();
   const { time } = getTimelinePointerTime(event);
   video.currentTime = time;
   updateTimelineProgress();
@@ -808,12 +1007,17 @@ video.addEventListener("durationchange", () => {
 video.addEventListener("loadedmetadata", () => {
   updateTimelineProgress();
   updatePlayPauseIcon();
+  updateSpeedButton();
 
   if (selectedIndex >= 0 && playlist[selectedIndex]) {
     playlist[selectedIndex].duration = video.duration;
     updatePlaylistCard(selectedIndex);
     updateSourceLabels();
   }
+});
+
+video.addEventListener("ratechange", () => {
+  updateSpeedButton();
 });
 
 openNativeButton.addEventListener("click", async () => {
@@ -890,6 +1094,7 @@ window.addEventListener("keydown", (event) => {
 
   if (event.code === "Space" || event.key === " " || event.key === "Spacebar") {
     event.preventDefault();
+    showControls();
 
     if (video.paused) {
       video
@@ -910,6 +1115,7 @@ window.addEventListener("keydown", (event) => {
 
   if (event.code === "ArrowLeft") {
     event.preventDefault();
+    showControls();
     video.currentTime = Math.max(0, video.currentTime - 10);
     statusText.textContent = `Seeked to ${formatDuration(video.currentTime)}`;
     return;
@@ -917,6 +1123,7 @@ window.addEventListener("keydown", (event) => {
 
   if (event.code === "ArrowRight") {
     event.preventDefault();
+    showControls();
     const duration = Number.isFinite(video.duration)
       ? video.duration
       : video.currentTime + 10;
@@ -927,6 +1134,7 @@ window.addEventListener("keydown", (event) => {
 
   if (event.key.toLowerCase() === "f") {
     event.preventDefault();
+    showControls();
     toggleFullscreen();
     return;
   }
@@ -957,18 +1165,23 @@ window.addEventListener("beforeunload", () => {
 video.addEventListener("ended", () => {
   statusText.textContent = "Playback ended.";
   updatePlayPauseIcon();
+  showControls();
 });
 
 video.addEventListener("play", () => {
   updatePlayPauseIcon();
+  scheduleControlsHide();
 });
 
 video.addEventListener("pause", () => {
   updatePlayPauseIcon();
+  showControls();
 });
 
 document.addEventListener("fullscreenchange", () => {
   updateFullscreenIcon();
+  updateFullscreenNavigation();
+  showControls();
 });
 
 updateTimelineProgress();
@@ -976,6 +1189,9 @@ updateSpeedButton();
 updateSidebarVisibility();
 updatePlayPauseIcon();
 updateFullscreenIcon();
+updateControlsLockButton();
+updateFullscreenNavigation();
+showControls();
 
 // Sidebar drag-resize
 (function initSidebarResize() {

@@ -49,10 +49,34 @@
               <div class="video-stage">
                 <video id="video" preload="metadata"></video>
 
+                <div id="fullscreenNavZone" class="fullscreen-nav-zone" aria-hidden="true">
+                  <button id="prevVideoButton" class="fullscreen-nav-btn prev" type="button" aria-label="Previous video">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M15 18l-6-6 6-6" />
+                    </svg>
+                  </button>
+                  <button id="nextVideoButton" class="fullscreen-nav-btn next" type="button" aria-label="Next video">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M9 6l6 6-6 6" />
+                    </svg>
+                  </button>
+                </div>
+
                 <div id="overlayControls" class="overlay-controls">
                   <div class="overlay-top-row">
                     <button id="timeModeButton" class="time-chip" type="button" aria-label="Toggle time display">00:00 / 00:00</button>
                     <div class="overlay-actions">
+                      <button id="controlsLockButton" class="overlay-icon-btn control-lock-btn" type="button" aria-pressed="false" aria-label="Keep controls visible">
+                        <svg id="controlsLockIcon" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M4 7h16" />
+                          <path d="M7 12h10" />
+                          <path d="M10 17h4" />
+                          <circle cx="16" cy="7" r="2" />
+                          <circle cx="8" cy="12" r="2" />
+                          <circle cx="14" cy="17" r="2" />
+                        </svg>
+                      </button>
+
                       <div class="speed-wrap">
                         <button id="speedButton" class="speed-btn" type="button" aria-haspopup="true" aria-expanded="false">1x</button>
                         <div id="speedPopover" class="speed-popover" hidden>

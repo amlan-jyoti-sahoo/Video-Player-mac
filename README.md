@@ -51,13 +51,11 @@ Packaged outputs will be generated in the `dist/` folder.
 
 
 ## upcoming feature
--> next,prev button directly swtiching from the current video in full screen mode (hide/show on hover)
--> eye button to hide the playbar , button in main video screen. 2 sec auto hide
--> custom scrollbar for the list and grid view
+<!-- To Be -->
 -> will take smiliar color palet like youtube
 -> show the prev played video percentage with red mark in left slide bar preview for both grid and list
 -> secert Mode. can crop any video for only content areat
 
 ## Bug
--> starting a new video is still showing the previous video playback speed but it running at 1x speed
--> 
+<!-- InProgress -->
+
