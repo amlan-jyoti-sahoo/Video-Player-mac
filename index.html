@@ -49,6 +49,28 @@
               <div class="video-stage">
                 <video id="video" preload="metadata"></video>
 
+                <!-- Secret Mode Banners (one per direction, independently draggable) -->
+                <div id="secretBannerTop" class="secret-banner secret-banner-top" aria-hidden="true">
+                  <div class="secret-banner-handle" title="Drag to expand">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="1.4" fill="currentColor"/><circle cx="15" cy="7" r="1.4" fill="currentColor"/><circle cx="9" cy="12" r="1.4" fill="currentColor"/><circle cx="15" cy="12" r="1.4" fill="currentColor"/><circle cx="9" cy="17" r="1.4" fill="currentColor"/><circle cx="15" cy="17" r="1.4" fill="currentColor"/></svg>
+                  </div>
+                </div>
+                <div id="secretBannerBottom" class="secret-banner secret-banner-bottom" aria-hidden="true">
+                  <div class="secret-banner-handle" title="Drag to expand">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="1.4" fill="currentColor"/><circle cx="15" cy="7" r="1.4" fill="currentColor"/><circle cx="9" cy="12" r="1.4" fill="currentColor"/><circle cx="15" cy="12" r="1.4" fill="currentColor"/><circle cx="9" cy="17" r="1.4" fill="currentColor"/><circle cx="15" cy="17" r="1.4" fill="currentColor"/></svg>
+                  </div>
+                </div>
+                <div id="secretBannerLeft" class="secret-banner secret-banner-left" aria-hidden="true">
+                  <div class="secret-banner-handle" title="Drag to expand">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(90deg)"><circle cx="9" cy="7" r="1.4" fill="currentColor"/><circle cx="15" cy="7" r="1.4" fill="currentColor"/><circle cx="9" cy="12" r="1.4" fill="currentColor"/><circle cx="15" cy="12" r="1.4" fill="currentColor"/><circle cx="9" cy="17" r="1.4" fill="currentColor"/><circle cx="15" cy="17" r="1.4" fill="currentColor"/></svg>
+                  </div>
+                </div>
+                <div id="secretBannerRight" class="secret-banner secret-banner-right" aria-hidden="true">
+                  <div class="secret-banner-handle" title="Drag to expand">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(90deg)"><circle cx="9" cy="7" r="1.4" fill="currentColor"/><circle cx="15" cy="7" r="1.4" fill="currentColor"/><circle cx="9" cy="12" r="1.4" fill="currentColor"/><circle cx="15" cy="12" r="1.4" fill="currentColor"/><circle cx="9" cy="17" r="1.4" fill="currentColor"/><circle cx="15" cy="17" r="1.4" fill="currentColor"/></svg>
+                  </div>
+                </div>
+
                 <div id="fullscreenNavZone" class="fullscreen-nav-zone" aria-hidden="true">
                   <button id="prevVideoButton" class="fullscreen-nav-btn prev" type="button" aria-label="Previous video">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -101,6 +123,43 @@
                           <path d="M3 5h18v14H3zM13 12h7v5h-7z" />
                         </svg>
                       </button>
+
+                      <!-- Secret Mode -->
+                      <div class="secret-mode-wrap">
+                        <button id="secretModeButton" class="overlay-icon-btn secret-mode-btn" type="button" aria-label="Secret mode crop" aria-haspopup="true" aria-expanded="false">
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                            <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                          </svg>
+                        </button>
+                        <div id="secretModeMenu" class="secret-mode-menu" hidden>
+                          <p class="secret-menu-label">Hide from&hellip;</p>
+                          <div class="secret-dir-grid">
+                            <button class="secret-dir-btn" data-dir="top" type="button" aria-label="Hide from top" aria-pressed="false">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+                              Top
+                            </button>
+                            <button class="secret-dir-btn" data-dir="right" type="button" aria-label="Hide from right" aria-pressed="false">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                              Right
+                            </button>
+                            <button class="secret-dir-btn" data-dir="left" type="button" aria-label="Hide from left" aria-pressed="false">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+                              Left
+                            </button>
+                            <button class="secret-dir-btn" data-dir="bottom" type="button" aria-label="Hide from bottom" aria-pressed="false">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg>
+                              Bottom
+                            </button>
+                          </div>
+                          <button id="secretDismissAll" class="secret-dismiss-btn" type="button" aria-label="Dismiss all secret banners">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            Dismiss All
+                          </button>
+                        </div>
+                      </div>
 
                       <button id="fullscreenToggleButton" class="overlay-icon-btn" type="button" aria-label="Toggle maximize">
                         <svg id="fullscreenIcon" viewBox="0 0 24 24" aria-hidden="true">

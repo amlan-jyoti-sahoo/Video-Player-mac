@@ -1193,6 +1193,215 @@ updateControlsLockButton();
 updateFullscreenNavigation();
 showControls();
 
+// ─── Secret Mode ────────────────────────────────────────────────────────────
+
+(function initSecretMode() {
+  const secretModeButton = document.getElementById("secretModeButton");
+  const secretModeMenu  = document.getElementById("secretModeMenu");
+  const dismissAllBtn   = document.getElementById("secretDismissAll");
+
+  const BANNERS = {
+    top:    document.getElementById("secretBannerTop"),
+    bottom: document.getElementById("secretBannerBottom"),
+    left:   document.getElementById("secretBannerLeft"),
+    right:  document.getElementById("secretBannerRight"),
+  };
+
+  if (!secretModeButton || !secretModeMenu) return;
+
+  // Per-banner state
+  const state = {};
+  for (const [dir, el] of Object.entries(BANNERS)) {
+    if (!el) continue;
+    state[dir] = {
+      el,
+      handle: el.querySelector(".secret-banner-handle"),
+      fraction: 0,
+      hideTimer: 0,
+      isDragging: false,
+    };
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  function isHorizontal(dir) {
+    return dir === "left" || dir === "right";
+  }
+
+  function applyBannerSize(dir) {
+    const s = state[dir];
+    if (!s) return;
+    s.el.style.setProperty("--sz", `${Math.round(s.fraction)}px`);
+  }
+
+  function scheduleHandleHide(dir) {
+    const s = state[dir];
+    if (!s) return;
+    window.clearTimeout(s.hideTimer);
+    s.hideTimer = window.setTimeout(() => {
+      if (!s.isDragging) {
+        s.handle?.classList.add("handle-hidden");
+      }
+    }, 5000);
+  }
+
+  function showHandle(dir) {
+    const s = state[dir];
+    if (!s) return;
+    window.clearTimeout(s.hideTimer);
+    s.handle?.classList.remove("handle-hidden");
+    scheduleHandleHide(dir);
+  }
+
+  function updateModeButton() {
+    const anyActive = Object.values(state).some((s) => s.el.classList.contains("active"));
+    secretModeButton.classList.toggle("has-active", anyActive);
+  }
+
+  function activateDir(dir) {
+    const s = state[dir];
+    if (!s) return;
+    s.fraction = 44; // initial strip height/width in px — just enough to show handle
+    applyBannerSize(dir);
+    s.el.classList.add("active");
+    s.handle?.classList.remove("handle-hidden");
+    scheduleHandleHide(dir);
+    document.querySelector(`.secret-dir-btn[data-dir="${dir}"]`)?.setAttribute("aria-pressed", "true");
+    document.querySelector(`.secret-dir-btn[data-dir="${dir}"]`)?.classList.add("active");
+    updateModeButton();
+  }
+
+  function deactivateDir(dir) {
+    const s = state[dir];
+    if (!s) return;
+    window.clearTimeout(s.hideTimer);
+    s.el.classList.remove("active");
+    s.handle?.classList.remove("handle-hidden");
+    document.querySelector(`.secret-dir-btn[data-dir="${dir}"]`)?.setAttribute("aria-pressed", "false");
+    document.querySelector(`.secret-dir-btn[data-dir="${dir}"]`)?.classList.remove("active");
+    updateModeButton();
+  }
+
+  function dismissAll() {
+    for (const dir of Object.keys(state)) {
+      deactivateDir(dir);
+    }
+    closeMenu();
+  }
+
+  // ── Menu open/close ────────────────────────────────────────────────────────
+
+  function openMenu() {
+    secretModeMenu.hidden = false;
+    secretModeButton.setAttribute("aria-expanded", "true");
+  }
+
+  function closeMenu() {
+    secretModeMenu.hidden = true;
+    secretModeButton.setAttribute("aria-expanded", "false");
+  }
+
+  secretModeButton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    secretModeMenu.hidden ? openMenu() : closeMenu();
+  });
+
+  // Direction buttons — multi-select toggle (menu stays open)
+  document.querySelectorAll(".secret-dir-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const dir = btn.dataset.dir;
+      const s = state[dir];
+      if (!s) return;
+      if (s.el.classList.contains("active")) {
+        deactivateDir(dir);
+      } else {
+        activateDir(dir);
+      }
+      // Menu stays open so user can select multiple directions
+    });
+  });
+
+  dismissAllBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dismissAll();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!secretModeMenu.hidden &&
+        !secretModeButton.contains(e.target) &&
+        !secretModeMenu.contains(e.target)) {
+      closeMenu();
+    }
+  });
+
+  // ── Per-banner hover → restore handle ──────────────────────────────────────
+
+  for (const [dir, s] of Object.entries(state)) {
+    s.el.addEventListener("mouseenter", () => {
+      if (s.el.classList.contains("active")) showHandle(dir);
+    });
+    s.el.addEventListener("mouseleave", () => {
+      if (s.el.classList.contains("active") && !s.isDragging) {
+        scheduleHandleHide(dir);
+      }
+    });
+    s.el.addEventListener("click", (e) => e.stopPropagation());
+    s.handle?.addEventListener("click", (e) => e.stopPropagation());
+  }
+
+  // ── Per-banner drag logic ───────────────────────────────────────────────────
+
+  let activeDragDir = null;
+
+  for (const [dir, s] of Object.entries(state)) {
+    s.handle?.addEventListener("mousedown", (e) => {
+      if (e.button !== 0 || !s.el.classList.contains("active")) return;
+      activeDragDir = dir;
+      s.isDragging = true;
+      s.handle.classList.add("dragging");
+      window.clearTimeout(s.hideTimer);
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
+
+  window.addEventListener("mousemove", (e) => {
+    if (!activeDragDir) return;
+    const s = state[activeDragDir];
+    if (!s || !s.isDragging) return;
+
+    const rect = videoStage.getBoundingClientRect();
+    const minPx = 20;
+    const maxPx = isHorizontal(activeDragDir)
+      ? Math.round(rect.width * 0.95)
+      : Math.round(rect.height * 0.95);
+
+    let next;
+    switch (activeDragDir) {
+      case "top":    next = e.clientY - rect.top;    break;
+      case "bottom": next = rect.bottom - e.clientY; break;
+      case "left":   next = e.clientX - rect.left;   break;
+      case "right":  next = rect.right - e.clientX;  break;
+      default:       next = s.fraction;
+    }
+
+    s.fraction = clamp(next, minPx, maxPx);
+    applyBannerSize(activeDragDir);
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!activeDragDir) return;
+    const s = state[activeDragDir];
+    if (s) {
+      s.isDragging = false;
+      s.handle?.classList.remove("dragging");
+      scheduleHandleHide(activeDragDir);
+    }
+    activeDragDir = null;
+  });
+}());
+
 // Sidebar drag-resize
 (function initSidebarResize() {
   if (!sidebarResizer || !playlistSidebar || !layoutShell) {

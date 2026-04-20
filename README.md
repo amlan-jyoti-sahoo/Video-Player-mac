@@ -54,7 +54,6 @@ Packaged outputs will be generated in the `dist/` folder.
 <!-- To Be -->
 -> will take smiliar color palet like youtube
 -> show the prev played video percentage with red mark in left slide bar preview for both grid and list
--> secert Mode. can crop any video for only content areat
 
 ## Bug
 <!-- InProgress -->

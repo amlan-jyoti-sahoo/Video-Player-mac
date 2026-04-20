@@ -5,6 +5,19 @@ const { pathToFileURL } = require("node:url");
 
 const isMac = process.platform === "darwin";
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi"]);
+const NATURAL_COLLATOR = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base"
+});
+
+function compareVideoPaths(a, b) {
+  const nameCompare = NATURAL_COLLATOR.compare(path.basename(a), path.basename(b));
+  if (nameCompare !== 0) {
+    return nameCompare;
+  }
+
+  return NATURAL_COLLATOR.compare(a, b);
+}
 
 function isVideoFile(filePath) {
   return VIDEO_EXTENSIONS.has(path.extname(filePath).toLowerCase());
@@ -21,6 +34,7 @@ function toVideoItem(filePath) {
 async function collectVideoFilesFromDirectory(dirPath) {
   const discovered = [];
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  entries.sort((a, b) => NATURAL_COLLATOR.compare(a.name, b.name));
 
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
@@ -60,7 +74,7 @@ async function normalizePathsToVideoItems(paths) {
     }
   }
 
-  const deduped = [...new Set(foundPaths)].sort((a, b) => a.localeCompare(b));
+  const deduped = [...new Set(foundPaths)].sort(compareVideoPaths);
   return deduped.map(toVideoItem);
 }
 
