@@ -142,8 +142,8 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1100,
     height: 760,
-    minWidth: 760,
-    minHeight: 520,
+    minWidth: 360,
+    minHeight: 360,
     title: "Local Video Player",
     autoHideMenuBar: true,
     webPreferences: {
