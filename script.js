@@ -15,6 +15,7 @@ const video = document.getElementById("video");
 const overlayControls = document.getElementById("overlayControls");
 const timeline = document.getElementById("timeline");
 const timelineProgress = document.getElementById("timelineProgress");
+const timelineKnob = document.getElementById("timelineKnob");
 const timelinePreview = document.getElementById("timelinePreview");
 const timelinePreviewImage = document.getElementById("timelinePreviewImage");
 const timelinePreviewTime = document.getElementById("timelinePreviewTime");
@@ -49,18 +50,25 @@ let playlist = [];
 let selectedIndex = -1;
 let previewGenerationId = 0;
 let currentSourceName = "";
+let currentSourceRootPath = "";
 let playlistView = "grid";
 let timeDisplayMode = "watched";
+let folderSummaryMode = "remaining";
 const SPEED_STEPS = [0.5, 0.75, 1, 1.5, 2];
 let hoverPreviewVideo = null;
 let hoverPreviewRequestId = 0;
 let lastHoverCaptureTime = 0;
 let controlsLocked = false;
 let controlsHideTimer = 0;
+let folderStateSaveTimer = 0;
+let pendingResumeTime = null;
+let isTimelineDragging = false;
 const PLAYLIST_PREVIEW_WIDTH = 640;
 const PLAYLIST_PREVIEW_HEIGHT = 360;
 const TIMELINE_PREVIEW_CAPTURE_WIDTH = 640;
 const TIMELINE_PREVIEW_CAPTURE_HEIGHT = 360;
+const RESUME_THRESHOLD_SECONDS = 1;
+const STATE_SAVE_DEBOUNCE_MS = 450;
 
 function escapeHtml(rawValue) {
   return String(rawValue)
@@ -90,6 +98,105 @@ function formatDuration(seconds) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizePathForKey(filePath) {
+  return String(filePath || "").replaceAll("\\", "/");
+}
+
+function getRelativeVideoPath(filePath, sourceRootPath) {
+  const absolute = normalizePathForKey(filePath);
+  const root = normalizePathForKey(sourceRootPath);
+
+  if (!absolute || !root) {
+    return absolute;
+  }
+
+  if (absolute === root) {
+    return "";
+  }
+
+  const rootWithSlash = root.endsWith("/") ? root : `${root}/`;
+  if (absolute.startsWith(rootWithSlash)) {
+    return absolute.slice(rootWithSlash.length);
+  }
+
+  return absolute;
+}
+
+function getItemProgressRatio(item) {
+  if (!item) {
+    return 0;
+  }
+
+  if (item.seen) {
+    return 1;
+  }
+
+  if (!Number.isFinite(item.duration) || item.duration <= 0) {
+    return 0;
+  }
+
+  return clamp((Number(item.resumeTime) || 0) / item.duration, 0, 1);
+}
+
+function shouldPersistFolderState() {
+  return Boolean(currentSourceRootPath && window.electronAPI?.saveFolderState);
+}
+
+function buildFolderStatePayload() {
+  const videos = {};
+
+  for (const item of playlist) {
+    if (!item?.relativePathKey) {
+      continue;
+    }
+
+    const duration = Number.isFinite(item.duration) && item.duration > 0 ? item.duration : 0;
+    const position = clamp(Number(item.resumeTime) || 0, 0, duration > 0 ? duration : Number.MAX_SAFE_INTEGER);
+    videos[item.relativePathKey] = {
+      position,
+      duration,
+      seen: Boolean(item.seen)
+    };
+  }
+
+  const selected = playlist[selectedIndex] || null;
+  return {
+    version: 1,
+    lastPlayedRelativePath: selected?.relativePathKey || "",
+    videos
+  };
+}
+
+async function persistFolderStateNow() {
+  if (!shouldPersistFolderState()) {
+    return;
+  }
+
+  const payload = buildFolderStatePayload();
+  await window.electronAPI.saveFolderState(currentSourceRootPath, payload);
+}
+
+function clearFolderStateSaveTimer() {
+  if (!folderStateSaveTimer) {
+    return;
+  }
+
+  window.clearTimeout(folderStateSaveTimer);
+  folderStateSaveTimer = 0;
+}
+
+function scheduleFolderStateSave() {
+  if (!shouldPersistFolderState()) {
+    return;
+  }
+
+  clearFolderStateSaveTimer();
+  folderStateSaveTimer = window.setTimeout(() => {
+    folderStateSaveTimer = 0;
+    void persistFolderStateNow();
+  }, STATE_SAVE_DEBOUNCE_MS);
 }
 
 function revokePlaylistObjectUrls(items) {
@@ -181,6 +288,10 @@ function getKnownDurations() {
 
 function updateSourceLabels() {
   sourceLabel.textContent = currentSourceName ? `Folder: ${currentSourceName}` : "";
+  sourceDurationLabel.classList.toggle("interactive", playlist.length > 1);
+  sourceDurationLabel.title = playlist.length > 1
+    ? "Click to toggle watched and remaining folder time"
+    : "";
 
   if (playlist.length <= 1) {
     sourceDurationLabel.textContent = "";
@@ -189,13 +300,31 @@ function updateSourceLabels() {
 
   const knownDurations = getKnownDurations();
   if (knownDurations.length === 0) {
-    sourceDurationLabel.textContent = "Total duration: calculating...";
+    sourceDurationLabel.textContent = "Folder time: calculating...";
     return;
   }
 
   const total = knownDurations.reduce((sum, duration) => sum + duration, 0);
+  const watched = playlist.reduce((sum, item) => {
+    if (!Number.isFinite(item.duration) || item.duration <= 0) {
+      return sum;
+    }
+
+    if (item.seen) {
+      return sum + item.duration;
+    }
+
+    return sum + clamp(Number(item.resumeTime) || 0, 0, item.duration);
+  }, 0);
+
+  const remaining = Math.max(0, total - watched);
   const suffix = knownDurations.length === playlist.length ? "" : " (partial)";
-  sourceDurationLabel.textContent = `Total duration: ${formatDuration(total)}${suffix}`;
+  if (folderSummaryMode === "watched") {
+    sourceDurationLabel.innerHTML = `Folder watched / total<br><span class="source-duration-time">${formatDuration(watched)} / ${formatDuration(total)}${suffix}</span>`;
+    return;
+  }
+
+  sourceDurationLabel.innerHTML = `Folder remaining / total<br><span class="source-duration-time">${formatDuration(remaining)} / ${formatDuration(total)}${suffix}</span>`;
 }
 
 function applyBackdrop(imageUrl) {
@@ -269,7 +398,7 @@ function updatePlaylistSelectionUI() {
     }
   }
 
-  if (selectedCard && playlistView === "list") {
+  if (selectedCard) {
     selectedCard.scrollIntoView({
       behavior: "smooth",
       block: "nearest",
@@ -290,7 +419,7 @@ function ensureHoverPreviewVideo(url) {
   hoverPreviewVideo.load();
 }
 
-function selectVideo(index, { autoplay = false } = {}) {
+function selectVideo(index, { autoplay = false, resume = false } = {}) {
   if (index < 0 || index >= playlist.length) {
     return;
   }
@@ -299,10 +428,12 @@ function selectVideo(index, { autoplay = false } = {}) {
   clearStandaloneObjectUrl();
 
   const selected = playlist[index];
+  pendingResumeTime = resume ? Number(selected.resumeTime) || 0 : null;
   setVideoSource(selected.videoUrl, selected.fileName);
   updatePlaylistSelectionUI();
   updateFullscreenNavigation();
   ensureHoverPreviewVideo(selected.videoUrl);
+  scheduleFolderStateSave();
 
   if (selected.thumbnail) {
     applyBackdrop(selected.thumbnail);
@@ -331,21 +462,33 @@ function renderPlaylist() {
   const fragment = document.createDocumentFragment();
 
   playlist.forEach((item, index) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "playlist-item";
-    button.dataset.index = String(index);
-    button.setAttribute("role", "option");
-    button.setAttribute("aria-selected", String(index === selectedIndex));
-    button.title = item.fileName;
+    const card = document.createElement("div");
+    card.className = "playlist-item";
+    card.dataset.index = String(index);
+    card.setAttribute("role", "option");
+    card.setAttribute("aria-selected", String(index === selectedIndex));
+    card.tabIndex = 0;
+    card.title = item.fileName;
+
+    const mainButton = document.createElement("button");
+    mainButton.type = "button";
+    mainButton.className = "playlist-main";
+    mainButton.title = item.fileName;
+
+    const progressPercent = Math.round(getItemProgressRatio(item) * 100);
 
     if (playlistView === "list") {
       const durationText = Number.isFinite(item.duration)
         ? formatDuration(item.duration)
         : "--:--";
-      button.innerHTML = `
-        <span class="playlist-name">${escapeHtml(item.fileName)}</span>
-        <span class="playlist-duration">${durationText}</span>
+      mainButton.innerHTML = `
+        <div class="playlist-row-main">
+          <span class="playlist-name">${escapeHtml(item.fileName)}</span>
+          <span class="playlist-duration">${durationText}</span>
+        </div>
+        <div class="playlist-progress" aria-hidden="true">
+          <span class="playlist-progress-fill" style="width: ${progressPercent}%"></span>
+        </div>
       `;
     } else {
       const durationBadge = Number.isFinite(item.duration)
@@ -356,18 +499,67 @@ function renderPlaylist() {
         ? `<img class="playlist-thumb" src="${item.thumbnail}" alt="Preview of ${escapeHtml(item.fileName)}" />`
         : `<div class="playlist-thumb placeholder">No preview</div>`;
 
-      button.innerHTML = `
+      mainButton.innerHTML = `
         ${durationBadge}
         ${thumbnailHtml}
         <span class="playlist-name">${escapeHtml(item.fileName)}</span>
+        <div class="playlist-progress" aria-hidden="true">
+          <span class="playlist-progress-fill" style="width: ${progressPercent}%"></span>
+        </div>
       `;
     }
 
-    button.addEventListener("click", () => {
+    mainButton.addEventListener("click", () => {
       selectVideo(index);
     });
 
-    fragment.appendChild(button);
+    card.addEventListener("keydown", (event) => {
+      if (event.code !== "Enter" && event.code !== "Space") {
+        return;
+      }
+
+      event.preventDefault();
+      selectVideo(index);
+    });
+
+    const seenLabel = document.createElement("label");
+    seenLabel.className = "playlist-seen-toggle";
+    seenLabel.title = "Mark video as fully watched";
+    seenLabel.innerHTML = `
+      <input class="playlist-seen-checkbox" type="checkbox" ${item.seen ? "checked" : ""} />
+      <span>Seen</span>
+    `;
+
+    const checkbox = seenLabel.querySelector(".playlist-seen-checkbox");
+    checkbox?.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+
+    checkbox?.addEventListener("change", (event) => {
+      const isChecked = Boolean(event.target?.checked);
+      if (isChecked) {
+        item.seen = true;
+        if (Number.isFinite(item.duration) && item.duration > 0) {
+          item.resumeTime = item.duration;
+        }
+      } else {
+        item.seen = false;
+        item.resumeTime = 0;
+
+        if (selectedIndex === index && video.src) {
+          video.currentTime = 0;
+          updateTimelineProgress();
+        }
+      }
+
+      updatePlaylistCard(index);
+      updateSourceLabels();
+      scheduleFolderStateSave();
+    });
+
+    card.append(mainButton, seenLabel);
+
+    fragment.appendChild(card);
   });
 
   playlistElement.appendChild(fragment);
@@ -377,8 +569,9 @@ function renderPlaylist() {
 function updatePlaylistCard(index) {
   const card = playlistElement.querySelector(`.playlist-item[data-index="${index}"]`);
   const item = playlist[index];
+  const mainButton = card?.querySelector(".playlist-main");
 
-  if (!card || !item) {
+  if (!card || !mainButton || !item) {
     return;
   }
 
@@ -401,8 +594,18 @@ function updatePlaylistCard(index) {
       const badge = document.createElement("span");
       badge.className = "playlist-duration";
       badge.textContent = formatDuration(item.duration);
-      card.prepend(badge);
+      mainButton.prepend(badge);
     }
+  }
+
+  const progressFill = card.querySelector(".playlist-progress-fill");
+  if (progressFill) {
+    progressFill.style.width = `${Math.round(getItemProgressRatio(item) * 100)}%`;
+  }
+
+  const seenCheckbox = card.querySelector(".playlist-seen-checkbox");
+  if (seenCheckbox) {
+    seenCheckbox.checked = Boolean(item.seen);
   }
 }
 
@@ -505,14 +708,16 @@ async function buildPlaylistPreviewData() {
   }
 }
 
-function setPlaylist(items, sourceName = "") {
+async function setPlaylist(items, sourceName = "", sourceRootPath = "") {
   clearStandaloneObjectUrl();
+  clearFolderStateSaveTimer();
 
   if (!Array.isArray(items) || items.length === 0) {
     revokePlaylistObjectUrls(playlist);
     playlist = [];
     selectedIndex = -1;
     currentSourceName = sourceName;
+    currentSourceRootPath = "";
     renderPlaylist();
     updateSourceLabels();
     updateFullscreenNavigation();
@@ -522,15 +727,49 @@ function setPlaylist(items, sourceName = "") {
     return;
   }
 
+  let storedState = {
+    lastPlayedRelativePath: "",
+    videos: {}
+  };
+
+  if (sourceRootPath && window.electronAPI?.loadFolderState) {
+    storedState = await window.electronAPI.loadFolderState(sourceRootPath);
+  }
+
   revokePlaylistObjectUrls(playlist);
-  playlist = items.map((item) => ({ ...item, thumbnail: null, duration: null }));
+  playlist = items.map((item) => {
+    const relativePathKey = getRelativeVideoPath(item.filePath, sourceRootPath) || item.fileName;
+    const storedVideo = storedState?.videos?.[relativePathKey] ?? {};
+    const storedDuration = Number(storedVideo.duration);
+    const storedPosition = Number(storedVideo.position);
+
+    return {
+      ...item,
+      relativePathKey,
+      thumbnail: null,
+      duration: Number.isFinite(storedDuration) && storedDuration > 0 ? storedDuration : null,
+      resumeTime: Number.isFinite(storedPosition) && storedPosition >= 0 ? storedPosition : 0,
+      seen: Boolean(storedVideo.seen)
+    };
+  });
+
   selectedIndex = -1;
   currentSourceName = sourceName;
+  currentSourceRootPath = sourceRootPath;
   renderPlaylist();
   updateSourceLabels();
-  selectVideo(0);
+
+  const preferredKey = storedState?.lastPlayedRelativePath || "";
+  const preferredIndex = preferredKey
+    ? playlist.findIndex((item) => item.relativePathKey === preferredKey)
+    : -1;
+  const startIndex = preferredIndex >= 0 ? preferredIndex : 0;
+  const shouldResume = preferredIndex >= 0 && (playlist[startIndex]?.resumeTime || 0) > RESUME_THRESHOLD_SECONDS;
+
+  selectVideo(startIndex, { autoplay: false, resume: shouldResume });
   updateFullscreenNavigation();
   statusText.textContent = "";
+  scheduleFolderStateSave();
   buildPlaylistPreviewData();
 }
 
@@ -540,7 +779,10 @@ function setSingleFileMode(file) {
   playlist = [];
   selectedIndex = -1;
   currentSourceName = "";
+  currentSourceRootPath = "";
+  pendingResumeTime = null;
   previewGenerationId += 1;
+  clearFolderStateSaveTimer();
   renderPlaylist();
   updateSourceLabels();
   clearStandaloneObjectUrl();
@@ -582,12 +824,18 @@ function getDroppedPaths(event) {
 function updateTimelineProgress() {
   if (!Number.isFinite(video.duration) || video.duration <= 0) {
     timelineProgress.style.width = "0%";
+    if (timelineKnob) {
+      timelineKnob.style.left = "0%";
+    }
     timeModeButton.textContent = "00:00 / 00:00";
     return;
   }
 
   const ratio = clamp(video.currentTime / video.duration, 0, 1);
   timelineProgress.style.width = `${ratio * 100}%`;
+  if (timelineKnob) {
+    timelineKnob.style.left = `${ratio * 100}%`;
+  }
   const watchedText = formatDuration(video.currentTime);
   const totalText = formatDuration(video.duration);
   const remaining = Math.max(0, video.duration - video.currentTime);
@@ -698,6 +946,16 @@ function getTimelinePointerTime(event) {
     ratio,
     time: duration * ratio
   };
+}
+
+function seekVideoFromTimelinePointer(event) {
+  if (!Number.isFinite(video.duration) || video.duration <= 0) {
+    return;
+  }
+
+  const { time } = getTimelinePointerTime(event);
+  video.currentTime = time;
+  updateTimelineProgress();
 }
 
 function setTimelinePreviewImageAt(time) {
@@ -830,6 +1088,15 @@ viewListButton.addEventListener("click", () => {
 viewGridButton.addEventListener("click", () => {
   playlistView = "grid";
   renderPlaylist();
+});
+
+sourceDurationLabel.addEventListener("click", () => {
+  if (playlist.length <= 1) {
+    return;
+  }
+
+  folderSummaryMode = folderSummaryMode === "remaining" ? "watched" : "remaining";
+  updateSourceLabels();
 });
 
 infoButton.addEventListener("click", () => {
@@ -979,6 +1246,45 @@ timeline.addEventListener("mousemove", (event) => {
   setTimelinePreviewImageAt(time);
 });
 
+timeline.addEventListener("mousedown", (event) => {
+  if (event.button !== 0) {
+    return;
+  }
+
+  event.preventDefault();
+  showControls();
+  isTimelineDragging = true;
+  seekVideoFromTimelinePointer(event);
+});
+
+timelineKnob?.addEventListener("mousedown", (event) => {
+  if (event.button !== 0) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  showControls();
+  isTimelineDragging = true;
+  seekVideoFromTimelinePointer(event);
+});
+
+window.addEventListener("mousemove", (event) => {
+  if (!isTimelineDragging) {
+    return;
+  }
+
+  seekVideoFromTimelinePointer(event);
+});
+
+window.addEventListener("mouseup", () => {
+  if (!isTimelineDragging) {
+    return;
+  }
+
+  isTimelineDragging = false;
+});
+
 timeline.addEventListener("mouseleave", () => {
   timelinePreview.classList.remove("expanded");
   timelinePreview.hidden = true;
@@ -990,14 +1296,25 @@ timeline.addEventListener("click", (event) => {
   }
 
   showControls();
-  const { time } = getTimelinePointerTime(event);
-  video.currentTime = time;
-  updateTimelineProgress();
+  seekVideoFromTimelinePointer(event);
 });
 
 video.addEventListener("timeupdate", () => {
   updateTimelineProgress();
   updatePlayPauseIcon();
+
+  if (selectedIndex >= 0 && playlist[selectedIndex]) {
+    const currentItem = playlist[selectedIndex];
+    currentItem.resumeTime = video.currentTime;
+
+    if (Number.isFinite(currentItem.duration) && currentItem.duration > 0) {
+      currentItem.seen = Boolean(currentItem.seen) && video.currentTime >= currentItem.duration - 0.2;
+    }
+
+    updatePlaylistCard(selectedIndex);
+    updateSourceLabels();
+    scheduleFolderStateSave();
+  }
 });
 
 video.addEventListener("durationchange", () => {
@@ -1005,14 +1322,30 @@ video.addEventListener("durationchange", () => {
 });
 
 video.addEventListener("loadedmetadata", () => {
+  const selected = selectedIndex >= 0 ? playlist[selectedIndex] : null;
+
+  if (selected && pendingResumeTime !== null && Number.isFinite(video.duration) && video.duration > 0) {
+    const clampedResume = clamp(Number(pendingResumeTime) || 0, 0, Math.max(0, video.duration - 0.1));
+    if (clampedResume > RESUME_THRESHOLD_SECONDS) {
+      video.currentTime = clampedResume;
+    }
+  }
+  pendingResumeTime = null;
+
   updateTimelineProgress();
   updatePlayPauseIcon();
   updateSpeedButton();
 
-  if (selectedIndex >= 0 && playlist[selectedIndex]) {
-    playlist[selectedIndex].duration = video.duration;
+  if (selected) {
+    selected.duration = video.duration;
+    if (selected.seen) {
+      selected.resumeTime = video.duration;
+    } else {
+      selected.resumeTime = Math.min(selected.resumeTime || 0, video.duration);
+    }
     updatePlaylistCard(selectedIndex);
     updateSourceLabels();
+    scheduleFolderStateSave();
   }
 });
 
@@ -1032,7 +1365,7 @@ openNativeButton.addEventListener("click", async () => {
     return;
   }
 
-  setPlaylist([result], "");
+  await setPlaylist([result], "", "");
 });
 
 openFolderButton.addEventListener("click", async () => {
@@ -1049,7 +1382,7 @@ openFolderButton.addEventListener("click", async () => {
     return;
   }
 
-  setPlaylist(items, result?.sourceName ?? "");
+  await setPlaylist(items, result?.sourceName ?? "", result?.sourceRootPath ?? "");
 });
 
 window.addEventListener("dragover", (event) => {
@@ -1079,7 +1412,11 @@ window.addEventListener("drop", async (event) => {
   }
 
   const result = await window.electronAPI.resolveDroppedPaths(droppedPaths);
-  setPlaylist(result?.items ?? [], result?.sourceName ?? "");
+  await setPlaylist(
+    result?.items ?? [],
+    result?.sourceName ?? "",
+    result?.sourceRootPath ?? ""
+  );
 });
 
 window.addEventListener("keydown", (event) => {
@@ -1158,11 +1495,24 @@ window.addEventListener("keydown", (event) => {
 }, true);
 
 window.addEventListener("beforeunload", () => {
+  clearFolderStateSaveTimer();
+  void persistFolderStateNow();
   clearStandaloneObjectUrl();
   revokePlaylistObjectUrls(playlist);
 });
 
 video.addEventListener("ended", () => {
+  if (selectedIndex >= 0 && playlist[selectedIndex]) {
+    const currentItem = playlist[selectedIndex];
+    currentItem.seen = true;
+    if (Number.isFinite(currentItem.duration) && currentItem.duration > 0) {
+      currentItem.resumeTime = currentItem.duration;
+    }
+    updatePlaylistCard(selectedIndex);
+    updateSourceLabels();
+    scheduleFolderStateSave();
+  }
+
   statusText.textContent = "Playback ended.";
   updatePlayPauseIcon();
   showControls();

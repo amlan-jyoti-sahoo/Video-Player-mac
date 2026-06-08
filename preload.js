@@ -15,5 +15,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   resolveDroppedPaths: async (paths) => {
     return ipcRenderer.invoke("resolve-video-paths", paths);
+  },
+  loadFolderState: async (folderPath) => {
+    return ipcRenderer.invoke("load-folder-state", folderPath);
+  },
+  saveFolderState: async (folderPath, state) => {
+    return ipcRenderer.invoke("save-folder-state", folderPath, state);
   }
 });

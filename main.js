@@ -5,10 +5,16 @@ const { pathToFileURL } = require("node:url");
 
 const isMac = process.platform === "darwin";
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi"]);
+const APP_METADATA_DIRNAME = ".our";
+const APP_METADATA_FILE = "video-player-state.json";
 const NATURAL_COLLATOR = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: "base"
 });
+
+function isHiddenPathName(name) {
+  return typeof name === "string" && name.startsWith(".");
+}
 
 function compareVideoPaths(a, b) {
   const nameCompare = NATURAL_COLLATOR.compare(path.basename(a), path.basename(b));
@@ -37,6 +43,10 @@ async function collectVideoFilesFromDirectory(dirPath) {
   entries.sort((a, b) => NATURAL_COLLATOR.compare(a.name, b.name));
 
   for (const entry of entries) {
+    if (isHiddenPathName(entry.name)) {
+      continue;
+    }
+
     const fullPath = path.join(dirPath, entry.name);
 
     if (entry.isDirectory()) {
@@ -51,6 +61,56 @@ async function collectVideoFilesFromDirectory(dirPath) {
   }
 
   return discovered;
+}
+
+function getFolderStatePaths(folderPath) {
+  const metadataDir = path.join(folderPath, APP_METADATA_DIRNAME);
+  const stateFile = path.join(metadataDir, APP_METADATA_FILE);
+  return { metadataDir, stateFile };
+}
+
+async function ensureFolderStateDir(folderPath) {
+  const { metadataDir } = getFolderStatePaths(folderPath);
+  await fs.mkdir(metadataDir, { recursive: true });
+  return metadataDir;
+}
+
+function sanitizeFolderState(rawState) {
+  if (!rawState || typeof rawState !== "object") {
+    return {
+      version: 1,
+      lastPlayedRelativePath: "",
+      videos: {}
+    };
+  }
+
+  const sanitizedVideos = {};
+  const inputVideos = rawState.videos && typeof rawState.videos === "object"
+    ? rawState.videos
+    : {};
+
+  for (const [relativePath, value] of Object.entries(inputVideos)) {
+    if (typeof relativePath !== "string" || !relativePath) {
+      continue;
+    }
+
+    const entry = value && typeof value === "object" ? value : {};
+    const position = Number(entry.position);
+    const duration = Number(entry.duration);
+
+    sanitizedVideos[relativePath] = {
+      position: Number.isFinite(position) && position >= 0 ? position : 0,
+      duration: Number.isFinite(duration) && duration > 0 ? duration : 0,
+      seen: Boolean(entry.seen)
+    };
+  }
+
+  return {
+    version: 1,
+    lastPlayedRelativePath:
+      typeof rawState.lastPlayedRelativePath === "string" ? rawState.lastPlayedRelativePath : "",
+    videos: sanitizedVideos
+  };
 }
 
 async function normalizePathsToVideoItems(paths) {
@@ -157,7 +217,7 @@ ipcMain.handle("pick-video-folder", async () => {
 
   const folderPath = result.filePaths[0];
   const items = await normalizePathsToVideoItems([folderPath]);
-  return { items, sourceName: path.basename(folderPath) };
+  return { items, sourceName: path.basename(folderPath), sourceRootPath: folderPath };
 });
 
 ipcMain.handle("resolve-video-paths", async (_event, paths = []) => {
@@ -166,12 +226,14 @@ ipcMain.handle("resolve-video-paths", async (_event, paths = []) => {
   }
 
   const folderNames = [];
+  const folderPaths = [];
 
   for (const inputPath of paths) {
     try {
       const stats = await fs.stat(inputPath);
       if (stats.isDirectory()) {
         folderNames.push(path.basename(inputPath));
+        folderPaths.push(inputPath);
       }
     } catch {
       // Ignore inaccessible or removed paths.
@@ -183,9 +245,49 @@ ipcMain.handle("resolve-video-paths", async (_event, paths = []) => {
     : folderNames.length > 1
       ? "Multiple folders"
       : "";
+  const sourceRootPath = folderPaths.length === 1 ? folderPaths[0] : "";
 
   const items = await normalizePathsToVideoItems(paths);
-  return { items, sourceName };
+  return { items, sourceName, sourceRootPath };
+});
+
+ipcMain.handle("load-folder-state", async (_event, folderPath = "") => {
+  if (typeof folderPath !== "string" || !folderPath) {
+    return {
+      version: 1,
+      lastPlayedRelativePath: "",
+      videos: {}
+    };
+  }
+
+  try {
+    await ensureFolderStateDir(folderPath);
+    const { stateFile } = getFolderStatePaths(folderPath);
+    const rawText = await fs.readFile(stateFile, "utf8");
+    return sanitizeFolderState(JSON.parse(rawText));
+  } catch {
+    return {
+      version: 1,
+      lastPlayedRelativePath: "",
+      videos: {}
+    };
+  }
+});
+
+ipcMain.handle("save-folder-state", async (_event, folderPath = "", state = {}) => {
+  if (typeof folderPath !== "string" || !folderPath) {
+    return { ok: false };
+  }
+
+  try {
+    await ensureFolderStateDir(folderPath);
+    const sanitized = sanitizeFolderState(state);
+    const { stateFile } = getFolderStatePaths(folderPath);
+    await fs.writeFile(stateFile, `${JSON.stringify(sanitized, null, 2)}\n`, "utf8");
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
 });
 
 app.whenReady().then(() => {
