@@ -526,7 +526,7 @@ function renderPlaylist() {
 
     mainButton.addEventListener("click", () => {
       const item = playlist[index];
-      selectVideo(index, { autoplay: !item.seen, resume: true });
+      selectVideo(index, { autoplay: false, resume: true });
     });
 
     card.addEventListener("keydown", (event) => {
@@ -1659,7 +1659,8 @@ if (retryButton) {
   }
 
   function updateModeButton() {
-    const anyActive = Object.values(state).some((s) => s.el.classList.contains("active"));
+    const innerBox = document.getElementById("secretBannerInner");
+    const anyActive = Object.values(state).some((s) => s.el.classList.contains("active")) || (innerBox && !innerBox.hidden);
     secretModeButton.classList.toggle("has-active", anyActive);
   }
 
@@ -1691,8 +1692,19 @@ if (retryButton) {
     for (const dir of Object.keys(state)) {
       deactivateDir(dir);
     }
+    const innerBox = document.getElementById("secretBannerInner");
+    const innerBtn = document.getElementById("secretInnerBtn");
+    if (innerBox) {
+      innerBox.hidden = true;
+    }
+    if (innerBtn) {
+      innerBtn.classList.remove("active");
+      innerBtn.setAttribute("aria-pressed", "false");
+    }
+    updateModeButton();
     closeMenu();
   }
+
 
   // ── Menu open/close ────────────────────────────────────────────────────────
 
@@ -1852,3 +1864,120 @@ if (retryButton) {
     sidebarResizer.classList.remove("dragging");
   });
 }());
+
+(function initInnerBox() {
+  const innerBtn = document.getElementById("secretInnerBtn");
+  const innerBox = document.getElementById("secretBannerInner");
+  const lockBtn = document.getElementById("innerBoxLock");
+  const container = document.querySelector(".video-stage");
+  const secretModeButton = document.getElementById("secretModeButton");
+
+  if (!innerBtn || !innerBox) return;
+
+  let isLocked = false;
+  let isDragging = false;
+  let isResizing = false;
+  let resizeDir = "";
+
+  let startX = 0, startY = 0;
+  let startLeft = 0, startTop = 0, startWidth = 0, startHeight = 0;
+
+  innerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isHidden = innerBox.hidden;
+    innerBox.hidden = !isHidden;
+    innerBtn.classList.toggle("active", isHidden);
+    innerBtn.setAttribute("aria-pressed", String(isHidden));
+    const anyActive = document.querySelectorAll('.secret-dir-btn.active').length > 0 || isHidden;
+    secretModeButton?.classList.toggle("has-active", anyActive);
+  });
+
+  lockBtn?.addEventListener("mousedown", (e) => e.stopPropagation());
+  lockBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    isLocked = !isLocked;
+    
+    innerBox.classList.toggle("locked", isLocked);
+    const unlockedIcon = lockBtn.querySelector(".icon-unlocked");
+    const lockedIcon = lockBtn.querySelector(".icon-locked");
+    if (unlockedIcon) unlockedIcon.style.display = isLocked ? "none" : "";
+    if (lockedIcon) lockedIcon.style.display = isLocked ? "" : "none";
+  });
+
+  const mousedownHandler = (e) => {
+    if (e.button !== 0 || isLocked) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    startX = e.clientX;
+    startY = e.clientY;
+    
+    const rect = innerBox.getBoundingClientRect();
+    if (!container) return;
+    const containerRect = container.getBoundingClientRect();
+
+    startLeft = rect.left - containerRect.left;
+    startTop = rect.top - containerRect.top;
+    startWidth = rect.width;
+    startHeight = rect.height;
+
+    if (e.target.classList.contains("resize-handle")) {
+      isResizing = true;
+      if (e.target.classList.contains("nw")) resizeDir = "nw";
+      else if (e.target.classList.contains("ne")) resizeDir = "ne";
+      else if (e.target.classList.contains("sw")) resizeDir = "sw";
+      else if (e.target.classList.contains("se")) resizeDir = "se";
+    } else {
+      isDragging = true;
+    }
+  };
+
+  innerBox.addEventListener("mousedown", mousedownHandler);
+
+  window.addEventListener("mousemove", (e) => {
+    if (!isDragging && !isResizing || !container) return;
+    
+    const containerRect = container.getBoundingClientRect();
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    if (isDragging) {
+      let newLeft = Math.max(0, Math.min(startLeft + dx, containerRect.width - startWidth));
+      let newTop = Math.max(0, Math.min(startTop + dy, containerRect.height - startHeight));
+
+      innerBox.style.left = `${(newLeft / containerRect.width) * 100}%`;
+      innerBox.style.top = `${(newTop / containerRect.height) * 100}%`;
+    } else if (isResizing) {
+      let newLeft = startLeft;
+      let newTop = startTop;
+      let newWidth = startWidth;
+      let newHeight = startHeight;
+
+      if (resizeDir.includes("w")) {
+        newLeft = Math.max(0, Math.min(startLeft + dx, startLeft + startWidth - 20));
+        newWidth = startWidth + (startLeft - newLeft);
+      }
+      if (resizeDir.includes("e")) {
+        newWidth = Math.max(20, Math.min(startWidth + dx, containerRect.width - startLeft));
+      }
+      if (resizeDir.includes("n")) {
+        newTop = Math.max(0, Math.min(startTop + dy, startTop + startHeight - 20));
+        newHeight = startHeight + (startTop - newTop);
+      }
+      if (resizeDir.includes("s")) {
+        newHeight = Math.max(20, Math.min(startHeight + dy, containerRect.height - startTop));
+      }
+
+      innerBox.style.left = `${(newLeft / containerRect.width) * 100}%`;
+      innerBox.style.top = `${(newTop / containerRect.height) * 100}%`;
+      innerBox.style.width = `${(newWidth / containerRect.width) * 100}%`;
+      innerBox.style.height = `${(newHeight / containerRect.height) * 100}%`;
+    }
+  });
+
+  window.addEventListener("mouseup", () => {
+    isDragging = false;
+    isResizing = false;
+  });
+
+})();

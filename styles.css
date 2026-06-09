@@ -1404,3 +1404,116 @@ body.drag-active .status::after {
   height: 100% !important;
   flex: 1 1 auto !important;
 }
+
+.secret-inner-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+  margin-bottom: 6px;
+}
+
+.secret-inner-btn:hover {
+  background: rgba(102, 227, 255, 0.18);
+  border-color: rgba(102, 227, 255, 0.55);
+  color: var(--accent);
+}
+
+.secret-inner-btn.active {
+  background: rgba(255, 209, 102, 0.22);
+  border-color: rgba(255, 209, 102, 0.75);
+  color: #ffd166;
+}
+
+.secret-inner-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Inner Box itself */
+.secret-banner-inner {
+  position: absolute;
+  top: 30%;
+  left: 30%;
+  width: 40%;
+  height: 40%;
+  background: #000;
+  z-index: 9;
+  border: 2px solid #ffd166;
+  box-shadow: 0 0 0 1px rgba(255, 209, 102, 0.4);
+  cursor: move;
+  touch-action: none;
+}
+.secret-banner-inner[hidden] {
+  display: none !important;
+}
+
+.secret-banner-inner.locked {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  cursor: default;
+}
+
+.resize-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #ffd166;
+  z-index: 10;
+  border: 1px solid #000;
+}
+
+.secret-banner-inner.locked .resize-handle {
+  display: none;
+}
+
+.resize-handle.nw { top: -7px; left: -7px; cursor: nwse-resize; }
+.resize-handle.ne { top: -7px; right: -7px; cursor: nesw-resize; }
+.resize-handle.sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
+.resize-handle.se { bottom: -7px; right: -7px; cursor: nwse-resize; }
+
+.secret-inner-lock {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  padding: 0;
+}
+
+.secret-banner-inner:hover .secret-inner-lock {
+  opacity: 1;
+}
+
+.secret-banner-inner.locked .secret-inner-lock {
+  opacity: 0;
+}
+.secret-banner-inner.locked:hover .secret-inner-lock {
+  opacity: 1;
+}
+
+.secret-inner-lock svg {
+  width: 18px;
+  height: 18px;
+}
+
