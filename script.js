@@ -44,6 +44,8 @@ const infoContent = document.getElementById("infoContent");
 const dynamicBackdrop = document.getElementById("dynamicBackdrop");
 const statusText = document.getElementById("status");
 const videoStage = document.querySelector(".video-stage");
+const retryOverlay = document.getElementById("retryOverlay");
+const retryButton = document.getElementById("retryButton");
 
 let standaloneObjectUrl = null;
 let playlist = [];
@@ -62,6 +64,7 @@ let controlsLocked = false;
 let controlsHideTimer = 0;
 let folderStateSaveTimer = 0;
 let pendingResumeTime = null;
+let pendingRetryShow = false;
 let isTimelineDragging = false;
 const PLAYLIST_PREVIEW_WIDTH = 640;
 const PLAYLIST_PREVIEW_HEIGHT = 360;
@@ -428,7 +431,19 @@ function selectVideo(index, { autoplay = false, resume = false } = {}) {
   clearStandaloneObjectUrl();
 
   const selected = playlist[index];
-  pendingResumeTime = resume ? Number(selected.resumeTime) || 0 : null;
+  
+  if (retryOverlay) {
+    retryOverlay.hidden = true;
+  }
+
+  if (resume && selected.seen) {
+    pendingResumeTime = Number(selected.duration) || 0;
+    pendingRetryShow = true;
+  } else {
+    pendingResumeTime = resume ? Number(selected.resumeTime) || 0 : null;
+    pendingRetryShow = false;
+  }
+
   setVideoSource(selected.videoUrl, selected.fileName);
   updatePlaylistSelectionUI();
   updateFullscreenNavigation();
@@ -510,7 +525,8 @@ function renderPlaylist() {
     }
 
     mainButton.addEventListener("click", () => {
-      selectVideo(index);
+      const item = playlist[index];
+      selectVideo(index, { autoplay: !item.seen, resume: true });
     });
 
     card.addEventListener("keydown", (event) => {
@@ -1336,6 +1352,11 @@ video.addEventListener("loadedmetadata", () => {
   updatePlayPauseIcon();
   updateSpeedButton();
 
+  if (pendingRetryShow && retryOverlay) {
+    retryOverlay.hidden = false;
+    pendingRetryShow = false;
+  }
+
   if (selected) {
     selected.duration = video.duration;
     if (selected.seen) {
@@ -1512,15 +1533,27 @@ video.addEventListener("ended", () => {
     updateSourceLabels();
     scheduleFolderStateSave();
   }
-
   statusText.textContent = "Playback ended.";
   updatePlayPauseIcon();
   showControls();
+
+  if (retryOverlay) {
+    retryOverlay.hidden = false;
+  }
 });
 
 video.addEventListener("play", () => {
+  if (retryOverlay && !retryOverlay.hidden) {
+    retryOverlay.hidden = true;
+  }
   updatePlayPauseIcon();
   scheduleControlsHide();
+});
+
+video.addEventListener("seeking", () => {
+  if (retryOverlay && !retryOverlay.hidden) {
+    retryOverlay.hidden = true;
+  }
 });
 
 video.addEventListener("pause", () => {
@@ -1542,6 +1575,28 @@ updateFullscreenIcon();
 updateControlsLockButton();
 updateFullscreenNavigation();
 showControls();
+
+if (retryButton) {
+  retryButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (retryOverlay) {
+      retryOverlay.hidden = true;
+    }
+    
+    if (selectedIndex >= 0 && playlist[selectedIndex]) {
+      playlist[selectedIndex].seen = false;
+      playlist[selectedIndex].resumeTime = 0;
+      updatePlaylistCard(selectedIndex);
+      updateSourceLabels();
+      scheduleFolderStateSave();
+    }
+    
+    video.currentTime = 0;
+    video.play().catch(() => {
+      statusText.textContent = "Unable to play video.";
+    });
+  });
+}
 
 // ─── Secret Mode ────────────────────────────────────────────────────────────
 

@@ -1353,3 +1353,54 @@ body.drag-active .status::after {
   display: block;
   pointer-events: none;
 }
+
+.retry-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 20;
+}
+.retry-overlay[hidden] {
+  display: none !important;
+}
+
+.retry-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 16px;
+  padding: 24px 36px;
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background 180ms ease, transform 180ms ease;
+}
+
+.retry-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.retry-btn svg {
+  width: 48px;
+  height: 48px;
+  stroke: currentColor;
+}
+
+.retry-btn span {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+/* Override for fullscreen inside responsive mode to keep video centered */
+.player-shell.is-fullscreen .video-stage {
+  aspect-ratio: auto !important;
+  height: 100% !important;
+  flex: 1 1 auto !important;
+}
