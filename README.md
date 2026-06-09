@@ -1,4 +1,4 @@
-# Local Video Player (macOS)
+# AeroPlay (macOS)
 
 A simple local video player desktop app for your Mac.
 
@@ -40,6 +40,14 @@ Run:
 
 ```bash
 npm run dist:mac
+```
+
+## Build a Windows app bundle
+
+Run:
+
+```bash
+npm run dist:win
 ```
 
 Packaged outputs will be generated in the `dist/` folder.

@@ -144,8 +144,9 @@ function createWindow() {
     height: 760,
     minWidth: 360,
     minHeight: 360,
-    title: "Local Video Player",
+    title: "AeroPlay",
     autoHideMenuBar: true,
+    icon: path.join(__dirname, "assets", "video-player-icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,

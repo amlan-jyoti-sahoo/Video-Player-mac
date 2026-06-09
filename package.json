@@ -1,11 +1,12 @@
 {
-  "name": "local-video-player-mac",
-  "version": "1.0.0",
+  "name": "aeroplay",
+  "version": "1.0.1",
   "description": "Simple local video player desktop app for macOS",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist:mac": "electron-builder --mac"
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
   },
   "keywords": [
     "electron",
@@ -19,15 +20,17 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.localvideoplayer.app",
-    "productName": "Local Video Player",
+    "appId": "com.aeroplay.app",
+    "productName": "AeroPlay",
+    "icon": "assets/video-player-icon.png",
     "files": [
       "index.html",
       "styles.css",
       "script.js",
       "main.js",
       "preload.js",
-      "package.json"
+      "package.json",
+      "assets/**/*"
     ],
     "mac": {
       "target": [
@@ -35,6 +38,12 @@
         "zip"
       ],
       "category": "public.app-category.video"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ]
     }
   }
 }
