@@ -23,6 +23,7 @@ const timeModeButton = document.getElementById("timeModeButton");
 const playPauseButton = document.getElementById("playPauseButton");
 const playPauseIcon = document.getElementById("playPauseIcon");
 const pipButton = document.getElementById("pipButton");
+const overlayInfoButton = document.getElementById("overlayInfoButton");
 const controlsLockButton = document.getElementById("controlsLockButton");
 const controlsLockIcon = document.getElementById("controlsLockIcon");
 const speedButton = document.getElementById("speedButton");
@@ -498,7 +499,7 @@ function renderPlaylist() {
         : "--:--";
       mainButton.innerHTML = `
         <div class="playlist-row-main">
-          <span class="playlist-name">${escapeHtml(item.fileName)}</span>
+          <span class="playlist-name">${index + 1}. ${escapeHtml(item.fileName)}</span>
           <span class="playlist-duration">${durationText}</span>
         </div>
         <div class="playlist-progress" aria-hidden="true">
@@ -517,7 +518,7 @@ function renderPlaylist() {
       mainButton.innerHTML = `
         ${durationBadge}
         ${thumbnailHtml}
-        <span class="playlist-name">${escapeHtml(item.fileName)}</span>
+        <span class="playlist-name">${index + 1}. ${escapeHtml(item.fileName)}</span>
         <div class="playlist-progress" aria-hidden="true">
           <span class="playlist-progress-fill" style="width: ${progressPercent}%"></span>
         </div>
@@ -1074,8 +1075,10 @@ function openInfoDialog() {
     ? formatDuration(knownDurations.reduce((sum, duration) => sum + duration, 0))
     : "Unknown";
 
+  const currentNum = selectedIndex >= 0 ? selectedIndex + 1 : 1;
   const lines = [
     `File: ${selected?.fileName ?? "Single selected file"}`,
+    `File Number: ${currentNum} / ${playlist.length || 1}`,
     `Current duration: ${formatDuration(video.duration)}`,
     `Resolution: ${video.videoWidth > 0 ? `${video.videoWidth} x ${video.videoHeight}` : "Unknown"}`,
     `Source: ${currentSourceName || "Manual selection"}`,
@@ -1118,6 +1121,12 @@ sourceDurationLabel.addEventListener("click", () => {
 infoButton.addEventListener("click", () => {
   openInfoDialog();
 });
+
+if (overlayInfoButton) {
+  overlayInfoButton.addEventListener("click", () => {
+    openInfoDialog();
+  });
+}
 
 timeModeButton.addEventListener("click", () => {
   timeDisplayMode = timeDisplayMode === "watched" ? "remaining" : "watched";
@@ -1324,7 +1333,9 @@ video.addEventListener("timeupdate", () => {
     currentItem.resumeTime = video.currentTime;
 
     if (Number.isFinite(currentItem.duration) && currentItem.duration > 0) {
-      currentItem.seen = Boolean(currentItem.seen) && video.currentTime >= currentItem.duration - 0.2;
+      if (!currentItem.seen && video.currentTime >= currentItem.duration - 0.2) {
+        currentItem.seen = true;
+      }
     }
 
     updatePlaylistCard(selectedIndex);
@@ -1339,11 +1350,13 @@ video.addEventListener("durationchange", () => {
 
 video.addEventListener("loadedmetadata", () => {
   const selected = selectedIndex >= 0 ? playlist[selectedIndex] : null;
+  let didSeek = false;
 
   if (selected && pendingResumeTime !== null && Number.isFinite(video.duration) && video.duration > 0) {
     const clampedResume = clamp(Number(pendingResumeTime) || 0, 0, Math.max(0, video.duration - 0.1));
     if (clampedResume > RESUME_THRESHOLD_SECONDS) {
       video.currentTime = clampedResume;
+      didSeek = true;
     }
   }
   pendingResumeTime = null;
@@ -1353,7 +1366,13 @@ video.addEventListener("loadedmetadata", () => {
   updateSpeedButton();
 
   if (pendingRetryShow && retryOverlay) {
-    retryOverlay.hidden = false;
+    if (didSeek) {
+      video.addEventListener("seeked", () => {
+        if (retryOverlay) retryOverlay.hidden = false;
+      }, { once: true });
+    } else {
+      retryOverlay.hidden = false;
+    }
     pendingRetryShow = false;
   }
 

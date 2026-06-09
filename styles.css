@@ -467,6 +467,15 @@ h1 {
   width: 13px;
   height: 13px;
   margin: 0;
+  accent-color: #ffd166;
+}
+
+.hidden-unless-fullscreen {
+  display: none;
+}
+
+.player-shell.is-fullscreen .hidden-unless-fullscreen {
+  display: inline-grid;
 }
 
 .main-panel {
