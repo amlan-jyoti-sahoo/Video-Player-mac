@@ -816,7 +816,7 @@ video {
   justify-content: space-between;
   padding: 0 18px;
   pointer-events: none;
-  z-index: 1;
+  z-index: 30;
 }
 
 .player-shell.is-fullscreen .video-stage.has-playlist-nav .fullscreen-nav-zone {
@@ -1361,7 +1361,8 @@ body.drag-active .status::after {
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.6);
-  z-index: 20;
+  backdrop-filter: blur(6px);
+  z-index: 5;
 }
 .retry-overlay[hidden] {
   display: none !important;
@@ -1396,6 +1397,21 @@ body.drag-active .status::after {
 .retry-btn span {
   font-size: 1.2rem;
   font-weight: 600;
+}
+
+@media (max-width: 600px), (max-height: 480px) {
+  .retry-btn {
+    padding: 16px 24px;
+    gap: 8px;
+    border-radius: 12px;
+  }
+  .retry-btn svg {
+    width: 32px;
+    height: 32px;
+  }
+  .retry-btn span {
+    font-size: 1rem;
+  }
 }
 
 /* Override for fullscreen inside responsive mode to keep video centered */
