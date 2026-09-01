@@ -1,6 +1,6 @@
-# AeroPlay (macOS)
+# AeroPlay (Browser)
 
-A simple local video player desktop app for your Mac.
+A simple local video player that runs in Chrome without installation.
 
 ## Features
 
@@ -14,48 +14,25 @@ A simple local video player desktop app for your Mac.
 - `Space` to play/pause
 - `Left Arrow` to rewind 10 seconds
 - `Right Arrow` to forward 10 seconds
-- Native macOS file picker in desktop app mode
+- Chrome file and folder picker
 
-## Run as a desktop app
+## Run in Chrome
 
-1. Open Terminal in this folder.
-2. Install dependencies:
-
-```bash
-npm install
-```
-
-3. Start the app:
+1. Open Terminal in this folder and start the local web server:
 
 ```bash
 npm start
 ```
 
-4. Click Open Video for one file or Open Folder to load all videos from a directory.
-5. You can also drag and drop a video or folder directly into the app window.
+2. Open [http://127.0.0.1:4173](http://127.0.0.1:4173) in Chrome.
+3. Click Open Video for one or more files, or Open Folder to load videos from a directory.
 
-## Build a macOS app bundle
-
-Run:
-
-```bash
-npm run dist:mac
-```
-
-## Build a Windows app bundle
-
-Run:
-
-```bash
-npm run dist:win
-```
-
-Packaged outputs will be generated in the `dist/` folder.
+You may also open `index.html` directly in Chrome. Drag-and-drop accepts video files; use Open Folder for folder selection.
 
 ## Notes
 
 - Keyboard shortcuts work when focus is not inside a text input.
-- The app runs locally on your machine.
+- The app runs locally on your machine. Browsers do not allow a webpage to save playback state inside your selected folder.
 
 
 ## upcoming feature

@@ -1,5 +1,7 @@
 const openNativeButton = document.getElementById("openNative");
 const openFolderButton = document.getElementById("openFolder");
+const videoFilePicker = document.getElementById("videoFilePicker");
+const videoFolderPicker = document.getElementById("videoFolderPicker");
 const playlistSidebar = document.getElementById("playlistSidebar");
 const sidebarToggleButton = document.getElementById("sidebarToggle");
 const sidebarResizer = document.getElementById("sidebarResizer");
@@ -29,6 +31,11 @@ const controlsLockIcon = document.getElementById("controlsLockIcon");
 const speedButton = document.getElementById("speedButton");
 const speedPopover = document.getElementById("speedPopover");
 const speedMenu = document.getElementById("speedMenu");
+const muteButton = document.getElementById("muteButton");
+const volumePopover = document.getElementById("volumePopover");
+const volumeSlider = document.getElementById("volumeSlider");
+const volumeValue = document.getElementById("volumeValue");
+const volumeIcon = document.getElementById("volumeIcon");
 const customSpeedButton = document.getElementById("customSpeedButton");
 const customSpeedInputWrap = document.getElementById("customSpeedInputWrap");
 const customSpeedInput = document.getElementById("customSpeedInput");
@@ -63,6 +70,7 @@ let hoverPreviewRequestId = 0;
 let lastHoverCaptureTime = 0;
 let controlsLocked = false;
 let controlsHideTimer = 0;
+let volumePopoverTimer = 0;
 let folderStateSaveTimer = 0;
 let pendingResumeTime = null;
 let pendingRetryShow = false;
@@ -73,6 +81,7 @@ const TIMELINE_PREVIEW_CAPTURE_WIDTH = 640;
 const TIMELINE_PREVIEW_CAPTURE_HEIGHT = 360;
 const RESUME_THRESHOLD_SECONDS = 1;
 const STATE_SAVE_DEBOUNCE_MS = 450;
+const VIDEO_FILE_EXTENSION = /\.(mp4|mov|m4v|mkv|webm|avi)$/i;
 
 function escapeHtml(rawValue) {
   return String(rawValue)
@@ -106,6 +115,27 @@ function clamp(value, min, max) {
 
 function normalizePathForKey(filePath) {
   return String(filePath || "").replaceAll("\\", "/");
+}
+
+function isSupportedVideoFile(file) {
+  return file instanceof File && (file.type.startsWith("video/") || VIDEO_FILE_EXTENSION.test(file.name));
+}
+
+function createBrowserVideoItems(files) {
+  return files
+    .filter(isSupportedVideoFile)
+    .sort((first, second) => first.name.localeCompare(second.name, undefined, { numeric: true, sensitivity: "base" }))
+    .map((file) => ({
+      filePath: file.webkitRelativePath || file.name,
+      fileName: file.name,
+      videoUrl: URL.createObjectURL(file),
+      ownedObjectUrl: true
+    }));
+}
+
+function getBrowserFolderName(files) {
+  const relativePath = files.find((file) => file.webkitRelativePath)?.webkitRelativePath;
+  return relativePath ? relativePath.split("/")[0] : "";
 }
 
 function getRelativeVideoPath(filePath, sourceRootPath) {
@@ -881,6 +911,38 @@ function updatePlayPauseIcon() {
   }
 }
 
+function updateVolumeControls() {
+  const isMuted = video.muted || video.volume === 0;
+  const volumePercent = Math.round(video.volume * 100);
+  volumeSlider.value = String(volumePercent);
+  volumeValue.value = String(volumePercent);
+  muteButton?.setAttribute("aria-label", "Adjust volume");
+  muteButton?.setAttribute("aria-pressed", String(isMuted));
+
+  if (volumeIcon) {
+    volumeIcon.innerHTML = isMuted
+      ? "<path d=\"M11 5 6 9H3v6h3l5 4z\" /><path d=\"m16 9 5 5m0-5-5 5\" />"
+      : "<path d=\"M11 5 6 9H3v6h3l5 4z\" /><path d=\"M15.5 8.5a5 5 0 0 1 0 7\" /><path d=\"M18.5 5.5a9 9 0 0 1 0 13\" />";
+  }
+}
+
+function closeVolumePopover() {
+  window.clearTimeout(volumePopoverTimer);
+  volumePopoverTimer = 0;
+  volumePopover.hidden = true;
+  muteButton?.setAttribute("aria-expanded", "false");
+}
+
+function showVolumePopover() {
+  window.clearTimeout(volumePopoverTimer);
+  hideSpeedUi();
+  document.getElementById("secretModeMenu")?.setAttribute("hidden", "");
+  document.getElementById("secretModeButton")?.setAttribute("aria-expanded", "false");
+  volumePopover.hidden = false;
+  muteButton?.setAttribute("aria-expanded", "true");
+  volumePopoverTimer = window.setTimeout(closeVolumePopover, 3000);
+}
+
 function hideSpeedUi() {
   speedPopover.hidden = true;
   speedMenu.hidden = false;
@@ -1134,6 +1196,7 @@ timeModeButton.addEventListener("click", () => {
 });
 
 speedButton.addEventListener("click", () => {
+  closeVolumePopover();
   const isOpen = !speedPopover.hidden;
   speedPopover.hidden = isOpen;
   speedMenu.hidden = false;
@@ -1142,9 +1205,27 @@ speedButton.addEventListener("click", () => {
   showControls();
 });
 
+muteButton?.addEventListener("click", () => {
+  if (volumePopover.hidden) {
+    showVolumePopover();
+  } else {
+    closeVolumePopover();
+  }
+  showControls();
+});
+
+volumeSlider?.addEventListener("input", () => {
+  video.volume = Number(volumeSlider.value) / 100;
+  video.muted = video.volume === 0;
+  updateVolumeControls();
+  showVolumePopover();
+  showControls();
+});
+
 controlsLockButton?.addEventListener("click", () => {
   controlsLocked = !controlsLocked;
   updateControlsLockButton();
+  updateVolumeControls();
   showControls();
 });
 
@@ -1393,36 +1474,42 @@ video.addEventListener("ratechange", () => {
   updateSpeedButton();
 });
 
-openNativeButton.addEventListener("click", async () => {
-  if (!window.electronAPI?.openVideoDialog) {
-    statusText.textContent = "Native file picker is only available in desktop app mode.";
-    return;
-  }
-
-  const result = await window.electronAPI.openVideoDialog();
-
-  if (!result) {
-    return;
-  }
-
-  await setPlaylist([result], "", "");
+video.addEventListener("volumechange", () => {
+  updateVolumeControls();
 });
 
-openFolderButton.addEventListener("click", async () => {
-  if (!window.electronAPI?.openVideoFolderDialog) {
-    statusText.textContent = "Native folder picker is only available in desktop app mode.";
-    return;
-  }
+openNativeButton.addEventListener("click", () => {
+  videoFilePicker?.click();
+});
 
-  const result = await window.electronAPI.openVideoFolderDialog();
-  const items = result?.items ?? [];
+openFolderButton.addEventListener("click", () => {
+  videoFolderPicker?.click();
+});
+
+videoFilePicker?.addEventListener("change", async () => {
+  const items = createBrowserVideoItems([...videoFilePicker.files]);
+  videoFilePicker.value = "";
 
   if (items.length === 0) {
-    statusText.textContent = "No videos found in that folder.";
+    statusText.textContent = "Choose a supported video file.";
     return;
   }
 
-  await setPlaylist(items, result?.sourceName ?? "", result?.sourceRootPath ?? "");
+  await setPlaylist(items);
+});
+
+videoFolderPicker?.addEventListener("change", async () => {
+  const files = [...videoFolderPicker.files];
+  const items = createBrowserVideoItems(files);
+  const sourceName = getBrowserFolderName(files);
+  videoFolderPicker.value = "";
+
+  if (items.length === 0) {
+    statusText.textContent = "No supported videos were found in that folder.";
+    return;
+  }
+
+  await setPlaylist(items, sourceName);
 });
 
 window.addEventListener("dragover", (event) => {
@@ -1440,23 +1527,15 @@ window.addEventListener("drop", async (event) => {
   event.preventDefault();
   document.body.classList.remove("drag-active");
 
-  const droppedPaths = getDroppedPaths(event);
-  if (droppedPaths.length === 0) {
-    statusText.textContent = "Drop a video file or folder from Finder.";
+  const files = [...(event.dataTransfer?.files ?? [])];
+  const items = createBrowserVideoItems(files);
+
+  if (items.length === 0) {
+    statusText.textContent = "Drop one or more supported video files.";
     return;
   }
 
-  if (!window.electronAPI?.resolveDroppedPaths) {
-    statusText.textContent = "Drag and drop folder support is available in desktop app mode.";
-    return;
-  }
-
-  const result = await window.electronAPI.resolveDroppedPaths(droppedPaths);
-  await setPlaylist(
-    result?.items ?? [],
-    result?.sourceName ?? "",
-    result?.sourceRootPath ?? ""
-  );
+  await setPlaylist(items, getBrowserFolderName(files));
 });
 
 window.addEventListener("keydown", (event) => {
@@ -1739,6 +1818,7 @@ if (retryButton) {
 
   secretModeButton.addEventListener("click", (e) => {
     e.stopPropagation();
+    closeVolumePopover();
     secretModeMenu.hidden ? openMenu() : closeMenu();
   });
 

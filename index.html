@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AeroPlay</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=2" />
   </head>
   <body>
     <div id="dynamicBackdrop" class="dynamic-backdrop" aria-hidden="true"></div>
@@ -37,7 +37,9 @@
             <div class="picker-row">
               <button id="openNative" type="button">Open Video</button>
               <button id="openFolder" type="button">Open Folder</button>
-              <span class="drop-label">Drag and drop a video file or folder here</span>
+              <input id="videoFilePicker" type="file" accept="video/*,.mkv,.avi,.m4v" hidden />
+              <input id="videoFolderPicker" type="file" accept="video/*,.mkv,.avi,.m4v" webkitdirectory multiple hidden />
+              <span class="drop-label">Drag and drop video files here</span>
             </div>
 
             <div class="now-playing-row">
@@ -143,6 +145,20 @@
                             <input id="customSpeedInput" type="number" min="0.25" max="4" step="0.25" placeholder="e.g. 1.25" />
                             <button id="applyCustomSpeed" type="button">Set</button>
                           </div>
+                        </div>
+                      </div>
+
+                      <div class="volume-wrap">
+                        <button id="muteButton" class="overlay-icon-btn" type="button" aria-label="Adjust volume" aria-haspopup="true" aria-expanded="false">
+                          <svg id="volumeIcon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M11 5 6 9H3v6h3l5 4z" />
+                            <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                            <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+                          </svg>
+                        </button>
+                        <div id="volumePopover" class="volume-popover" hidden>
+                          <output id="volumeValue" class="volume-value" for="volumeSlider">100</output>
+                          <input id="volumeSlider" class="volume-slider" type="range" min="0" max="100" value="100" aria-label="Video volume" />
                         </div>
                       </div>
 

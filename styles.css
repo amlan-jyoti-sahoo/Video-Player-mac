@@ -624,6 +624,67 @@ video {
   position: relative;
 }
 
+.volume-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.volume-popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  width: 48px;
+  height: 158px;
+  padding: 8px;
+  background: rgba(8, 17, 25, 0.95);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  z-index: 2;
+}
+
+.volume-popover[hidden] {
+  display: none;
+}
+
+.volume-slider {
+  appearance: slider-vertical;
+  width: 18px;
+  height: 112px;
+  accent-color: #ffd166;
+  cursor: pointer;
+  writing-mode: vertical-lr;
+  direction: rtl;
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+  background: #1c8f9e;
+  border-radius: 999px;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-left: 1px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #ff6b4a;
+}
+
+.volume-value {
+  color: #ffd166;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
 .overlay-icon-btn,
 .speed-btn {
   border: 1px solid rgba(255, 255, 255, 0.24);
@@ -1035,6 +1096,14 @@ body.drag-active .status::after {
   .overlay-actions {
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+
+  .volume-slider {
+    height: 96px;
+  }
+
+  .volume-popover {
+    height: 142px;
   }
 
   .status,

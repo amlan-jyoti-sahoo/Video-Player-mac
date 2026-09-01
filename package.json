@@ -1,49 +1,15 @@
 {
   "name": "aeroplay",
   "version": "1.0.1",
-  "description": "Simple local video player desktop app for macOS",
-  "main": "main.js",
+  "description": "Simple local video player for modern browsers",
   "scripts": {
-    "start": "electron .",
-    "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win"
+    "start": "python3 -m http.server --bind 127.0.0.1 4173"
   },
   "keywords": [
-    "electron",
+    "browser",
     "video-player",
     "macos"
   ],
   "author": "",
-  "license": "MIT",
-  "devDependencies": {
-    "electron": "^31.2.1",
-    "electron-builder": "^24.13.3"
-  },
-  "build": {
-    "appId": "com.aeroplay.app",
-    "productName": "AeroPlay",
-    "icon": "assets/video-player-icon.png",
-    "files": [
-      "index.html",
-      "styles.css",
-      "script.js",
-      "main.js",
-      "preload.js",
-      "package.json",
-      "assets/**/*"
-    ],
-    "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "category": "public.app-category.video"
-    },
-    "win": {
-      "target": [
-        "nsis",
-        "zip"
-      ]
-    }
-  }
+  "license": "MIT"
 }
