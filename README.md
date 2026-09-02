@@ -32,7 +32,7 @@ You may also open `index.html` directly in Chrome. Drag-and-drop accepts video f
 ## Notes
 
 - Keyboard shortcuts work when focus is not inside a text input.
-- The app runs locally on your machine. Browsers do not allow a webpage to save playback state inside your selected folder.
+- The app runs locally on your machine. Browser playback progress is saved in Chrome local storage for each selected file or folder playlist; browsers cannot save it inside the selected folder.
 
 
 ## upcoming feature

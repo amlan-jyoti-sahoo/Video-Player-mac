@@ -61,6 +61,7 @@ let selectedIndex = -1;
 let previewGenerationId = 0;
 let currentSourceName = "";
 let currentSourceRootPath = "";
+let currentBrowserStateKey = "";
 let playlistView = "grid";
 let timeDisplayMode = "watched";
 let folderSummaryMode = "remaining";
@@ -82,6 +83,7 @@ const TIMELINE_PREVIEW_CAPTURE_HEIGHT = 360;
 const RESUME_THRESHOLD_SECONDS = 1;
 const STATE_SAVE_DEBOUNCE_MS = 450;
 const VIDEO_FILE_EXTENSION = /\.(mp4|mov|m4v|mkv|webm|avi)$/i;
+const BROWSER_STATE_KEY_PREFIX = "aeroplay:playlist-state:";
 
 function escapeHtml(rawValue) {
   return String(rawValue)
@@ -128,6 +130,7 @@ function createBrowserVideoItems(files) {
     .map((file) => ({
       filePath: file.webkitRelativePath || file.name,
       fileName: file.name,
+      browserStorageKey: `${file.webkitRelativePath || file.name}:${file.size}:${file.lastModified}`,
       videoUrl: URL.createObjectURL(file),
       ownedObjectUrl: true
     }));
@@ -158,6 +161,14 @@ function getRelativeVideoPath(filePath, sourceRootPath) {
   return absolute;
 }
 
+function getBrowserStateKey(items) {
+  const playlistIdentity = items
+    .map((item) => item.browserStorageKey || item.filePath || item.fileName)
+    .sort()
+    .join("|");
+  return playlistIdentity ? `${BROWSER_STATE_KEY_PREFIX}${encodeURIComponent(playlistIdentity)}` : "";
+}
+
 function getItemProgressRatio(item) {
   if (!item) {
     return 0;
@@ -175,10 +186,22 @@ function getItemProgressRatio(item) {
 }
 
 function shouldPersistFolderState() {
-  return Boolean(currentSourceRootPath && window.electronAPI?.saveFolderState);
+  return Boolean(
+    (currentSourceRootPath && window.electronAPI?.saveFolderState) || currentBrowserStateKey
+  );
 }
 
 function buildFolderStatePayload() {
+  const activeItem = playlist[selectedIndex];
+  if (activeItem && Number.isFinite(video.currentTime) && video.currentTime >= 0) {
+    activeItem.resumeTime = video.currentTime;
+
+    if (Number.isFinite(video.duration) && video.duration > 0) {
+      activeItem.duration = video.duration;
+      activeItem.seen = video.currentTime >= video.duration - 0.2;
+    }
+  }
+
   const videos = {};
 
   for (const item of playlist) {
@@ -209,7 +232,16 @@ async function persistFolderStateNow() {
   }
 
   const payload = buildFolderStatePayload();
-  await window.electronAPI.saveFolderState(currentSourceRootPath, payload);
+  if (currentSourceRootPath && window.electronAPI?.saveFolderState) {
+    await window.electronAPI.saveFolderState(currentSourceRootPath, payload);
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(currentBrowserStateKey, JSON.stringify(payload));
+  } catch {
+    // Browsers can deny storage in private or restricted contexts.
+  }
 }
 
 function clearFolderStateSaveTimer() {
@@ -458,6 +490,7 @@ function selectVideo(index, { autoplay = false, resume = false } = {}) {
     return;
   }
 
+  void persistFolderStateNow();
   selectedIndex = index;
   clearStandaloneObjectUrl();
 
@@ -756,6 +789,7 @@ async function buildPlaylistPreviewData() {
 }
 
 async function setPlaylist(items, sourceName = "", sourceRootPath = "") {
+  await persistFolderStateNow();
   clearStandaloneObjectUrl();
   clearFolderStateSaveTimer();
 
@@ -765,6 +799,7 @@ async function setPlaylist(items, sourceName = "", sourceRootPath = "") {
     selectedIndex = -1;
     currentSourceName = sourceName;
     currentSourceRootPath = "";
+    currentBrowserStateKey = "";
     renderPlaylist();
     updateSourceLabels();
     updateFullscreenNavigation();
@@ -778,9 +813,19 @@ async function setPlaylist(items, sourceName = "", sourceRootPath = "") {
     lastPlayedRelativePath: "",
     videos: {}
   };
+  const browserStateKey = getBrowserStateKey(items);
 
   if (sourceRootPath && window.electronAPI?.loadFolderState) {
     storedState = await window.electronAPI.loadFolderState(sourceRootPath);
+  } else if (browserStateKey) {
+    try {
+      const savedState = JSON.parse(window.localStorage.getItem(browserStateKey) || "null");
+      if (savedState && typeof savedState === "object") {
+        storedState = savedState;
+      }
+    } catch {
+      // Ignore unavailable or invalid browser storage.
+    }
   }
 
   revokePlaylistObjectUrls(playlist);
@@ -803,6 +848,7 @@ async function setPlaylist(items, sourceName = "", sourceRootPath = "") {
   selectedIndex = -1;
   currentSourceName = sourceName;
   currentSourceRootPath = sourceRootPath;
+  currentBrowserStateKey = sourceRootPath ? "" : browserStateKey;
   renderPlaylist();
   updateSourceLabels();
 
@@ -827,6 +873,7 @@ function setSingleFileMode(file) {
   selectedIndex = -1;
   currentSourceName = "";
   currentSourceRootPath = "";
+  currentBrowserStateKey = "";
   pendingResumeTime = null;
   previewGenerationId += 1;
   clearFolderStateSaveTimer();
@@ -1656,7 +1703,15 @@ video.addEventListener("seeking", () => {
 
 video.addEventListener("pause", () => {
   updatePlayPauseIcon();
+  void persistFolderStateNow();
   showControls();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    clearFolderStateSaveTimer();
+    void persistFolderStateNow();
+  }
 });
 
 document.addEventListener("fullscreenchange", () => {
