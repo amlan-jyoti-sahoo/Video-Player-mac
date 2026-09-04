@@ -1369,7 +1369,7 @@ async function mountEmbedPlayer({
     disablekb: 1,
     fs: 0,
     iv_load_policy: 3,
-    cc_load_policy: 1,
+    cc_load_policy: 0,
     modestbranding: 1,
     playsinline: 1,
     rel: 0,
@@ -1470,7 +1470,7 @@ async function openYouTubeEmbed({ videoId, listId }, label) {
   embedActive = true;
   embedRequest = { videoId, listId, label };
   embedRate = 1;
-  youtubeCaptionsEnabled = true;
+  youtubeCaptionsEnabled = false;
   updateYouTubeCaptionsButton();
   embedStage.hidden = false;
   embedStage.classList.add("controls-owned");
