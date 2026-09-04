@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -153,6 +153,14 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false
     }
+  });
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("https://")) {
+      shell.openExternal(url);
+    }
+
+    return { action: "deny" };
   });
 
   win.loadFile("index.html");

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AeroPlay</title>
-    <link rel="stylesheet" href="styles.css?v=2" />
+    <link rel="stylesheet" href="styles.css?v=3" />
   </head>
   <body>
     <div id="dynamicBackdrop" class="dynamic-backdrop" aria-hidden="true"></div>
@@ -37,6 +37,7 @@
             <div class="picker-row">
               <button id="openNative" type="button">Open Video</button>
               <button id="openFolder" type="button">Open Folder</button>
+              <button id="openLink" type="button">Open Link</button>
               <input id="videoFilePicker" type="file" accept="video/*,.mkv,.avi,.m4v" hidden />
               <input id="videoFolderPicker" type="file" accept="video/*,.mkv,.avi,.m4v" webkitdirectory multiple hidden />
               <span class="drop-label">Drag and drop video files here</span>
@@ -50,6 +51,14 @@
             <section id="playerShell" class="player-shell" aria-label="Main player">
               <div class="video-stage">
                 <video id="video" preload="metadata"></video>
+
+                <div id="embedStage" class="embed-stage" hidden>
+                  <div id="embedMount" class="embed-frame"></div>
+                  <p id="embedLoading" class="embed-loading">Loading player&hellip;</p>
+                  <button id="embedCloseButton" class="embed-close-btn" type="button" aria-label="Close web player">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
 
                 <!-- Secret Mode Banners (one per direction, independently draggable) -->
                 <div id="secretBannerTop" class="secret-banner secret-banner-top" aria-hidden="true">
@@ -145,6 +154,30 @@
                             <input id="customSpeedInput" type="number" min="0.25" max="4" step="0.25" placeholder="e.g. 1.25" />
                             <button id="applyCustomSpeed" type="button">Set</button>
                           </div>
+                        </div>
+                      </div>
+
+                      <div id="youtubeSettingsWrap" class="youtube-settings-wrap">
+                        <button id="youtubeSettingsButton" class="overlay-icon-btn" type="button" aria-label="YouTube settings" aria-haspopup="true" aria-expanded="false">
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
+                            <path d="M19.4 15.2a2 2 0 0 0 0-3.6 2 2 0 0 0-1.2-3.6 2 2 0 0 0-2.5-2.5 2 2 0 0 0-3.6-1.2 2 2 0 0 0-3.6 0 2 2 0 0 0-2.5 2.5A2 2 0 0 0 4.8 8a2 2 0 0 0 0 3.6 2 2 0 0 0 0 3.6 2 2 0 0 0 3.6 2.5 2 2 0 0 0 2.5 2.5 2 2 0 0 0 3.6 0 2 2 0 0 0 3.6 0 2 2 0 0 0 2.5-2.5 2 2 0 0 0 2.5-2.5 2 2 0 0 0 2.5-2.5Z" />
+                          </svg>
+                        </button>
+                        <div id="youtubeSettingsMenu" class="youtube-settings-menu" hidden>
+                          <p class="youtube-settings-title">YouTube settings</p>
+                          <p class="youtube-settings-label">Quality</p>
+                          <div id="youtubeQualityMenu" class="youtube-quality-menu" role="group" aria-label="YouTube quality">
+                            <button type="button" class="youtube-quality-option selected" data-quality="auto">Auto</button>
+                            <button type="button" class="youtube-quality-option" data-quality="hd1080">1080p</button>
+                            <button type="button" class="youtube-quality-option" data-quality="hd720">720p</button>
+                            <button type="button" class="youtube-quality-option" data-quality="large">480p</button>
+                            <button type="button" class="youtube-quality-option" data-quality="medium">360p</button>
+                          </div>
+                          <button id="youtubeCaptionsButton" class="youtube-captions-button" type="button" aria-pressed="false">
+                            <span>Subtitles/CC</span>
+                            <strong id="youtubeCaptionsState">Off</strong>
+                          </button>
                         </div>
                       </div>
 
@@ -249,6 +282,26 @@
       <form method="dialog">
         <button type="submit">Close</button>
       </form>
+    </dialog>
+
+    <dialog id="linkDialog" class="info-dialog link-dialog">
+      <h2>Open Link</h2>
+      <p class="info-content">Paste a YouTube video or playlist link, or a direct video file URL (.mp4, .webm, .m4v).</p>
+      <input
+        id="linkInput"
+        class="link-input"
+        type="url"
+        inputmode="url"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="https://www.youtube.com/playlist?list=..."
+        aria-label="Video or playlist link"
+      />
+      <p id="linkError" class="link-error" role="alert" hidden></p>
+      <div class="link-actions">
+        <button id="linkCancel" type="button">Cancel</button>
+        <button id="linkSubmit" type="button" class="primary">Play</button>
+      </div>
     </dialog>
 
     <script src="script.js"></script>

@@ -499,7 +499,8 @@ h1 {
 }
 
 #openNative,
-#openFolder {
+#openFolder,
+#openLink {
   border: 1px solid rgba(255, 255, 255, 0.25);
   background: linear-gradient(180deg, #1d5e74, #18495a);
   color: var(--text);
@@ -510,12 +511,14 @@ h1 {
 }
 
 #openNative:hover,
-#openFolder:hover {
+#openFolder:hover,
+#openLink:hover {
   filter: brightness(1.1);
 }
 
 #openNative:focus-visible,
 #openFolder:focus-visible,
+#openLink:focus-visible,
 .sidebar-toggle:focus-visible,
 .info-btn:focus-visible {
   outline: 2px solid var(--focus);
@@ -576,6 +579,82 @@ video {
   max-height: 50%;
 }
 
+.embed-stage {
+  position: absolute;
+  inset: 0;
+  /* Stays under the secret-mode banners (8/9) and the overlay controls (30). */
+  z-index: 1;
+  background: #000;
+}
+
+/* The YouTube API swaps the mount node for its own iframe. */
+.embed-frame,
+.embed-frame iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.embed-stage.controls-owned .embed-frame {
+  pointer-events: none;
+}
+
+.embed-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  background: #000;
+  z-index: 5;
+}
+
+.embed-loading[hidden] {
+  display: none;
+}
+
+.embed-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.embed-close-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.embed-close-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* The hidden video element no longer gives the stage its height. */
+.video-stage.embed-active {
+  aspect-ratio: 16 / 9;
+}
+
+.video-stage.embed-active video,
+.video-stage.embed-active .retry-overlay {
+  display: none;
+}
+
+.video-stage.embed-active.native-controls .overlay-controls,
+.video-stage.embed-active.native-controls .fullscreen-nav-zone {
+  display: none;
+}
+
 .overlay-controls {
   position: absolute;
   left: 0;
@@ -622,6 +701,100 @@ video {
 
 .speed-wrap {
   position: relative;
+}
+
+.youtube-settings-wrap {
+  position: relative;
+  display: none;
+}
+
+.video-stage.embed-active .youtube-settings-wrap {
+  display: block;
+}
+
+.youtube-settings-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: 190px;
+  padding: 12px;
+  background: rgba(8, 17, 25, 0.97);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  z-index: 3;
+}
+
+.youtube-settings-menu[hidden] {
+  display: none;
+}
+
+.youtube-settings-title,
+.youtube-settings-label {
+  margin: 0;
+}
+
+.youtube-settings-title {
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.youtube-settings-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-bottom: 7px;
+}
+
+.youtube-quality-menu {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.youtube-quality-option {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 7px;
+  padding: 6px 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.youtube-quality-option.selected {
+  background: rgba(255, 209, 102, 0.3);
+  border-color: rgba(255, 209, 102, 0.85);
+}
+
+.youtube-captions-button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 8px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.78rem;
+  text-align: left;
+}
+
+.youtube-captions-button strong {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.youtube-captions-button.active {
+  background: rgba(255, 209, 102, 0.3);
+  border-color: rgba(255, 209, 102, 0.85);
+}
+
+.youtube-captions-button.active strong {
+  color: #ffd166;
 }
 
 .volume-wrap {
@@ -991,6 +1164,45 @@ video {
   color: var(--text);
   border-radius: 8px;
   padding: 6px 11px;
+}
+
+.link-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.link-input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.link-error {
+  margin: 8px 0 0;
+  color: #ff9d9d;
+  font-size: 0.85rem;
+}
+
+.link-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.link-dialog button {
+  cursor: pointer;
+}
+
+.link-dialog button.primary {
+  background: linear-gradient(180deg, #1d5e74, #18495a);
+  font-weight: 600;
 }
 
 .status {
