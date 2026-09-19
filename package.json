@@ -2,8 +2,12 @@
   "name": "aeroplay",
   "version": "1.0.1",
   "description": "Simple local video player for modern browsers",
+  "main": "main.js",
   "scripts": {
-    "start": "python3 -m http.server --bind 127.0.0.1 4173"
+    "start": "electron .",
+    "start:web": "python3 -m http.server --bind 127.0.0.1 4173",
+    "dist:mac": "electron-builder --mac --arm64",
+    "dist:mac:local": "electron-builder --config build-local.json --mac --arm64"
   },
   "keywords": [
     "browser",
@@ -11,5 +15,41 @@
     "macos"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.2.1",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.aeroplay.app",
+    "productName": "AeroPlay",
+    "asar": true,
+    "files": [
+      "assets/**/*",
+      "index.html",
+      "main.js",
+      "preload.js",
+      "script.js",
+      "styles.css",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.video",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "identity": "Developer ID Application",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "writeUpdateInfo": false
+    },
+    "forceCodeSigning": true
+  }
 }

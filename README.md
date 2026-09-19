@@ -1,6 +1,36 @@
-# AeroPlay (Browser)
+# AeroPlay
 
-A simple local video player that runs in Chrome without installation.
+A simple local video player for macOS and modern browsers.
+
+## Build the macOS app
+
+The DMG must be signed with a `Developer ID Application` certificate and notarized before it is shared. An unsigned, development-signed, or ad-hoc-signed DMG can be reported by macOS as malware even when the source is safe.
+
+Install dependencies and build the Apple Silicon DMG on a Mac enrolled in the Apple Developer Program:
+
+```bash
+npm install
+npm run dist:mac
+```
+
+For local testing without an Apple Developer certificate, build an unsigned DMG:
+
+```bash
+npm run dist:mac:local
+```
+
+The local DMG is created at `dist/AeroPlay-1.0.1-arm64.dmg`. It is not suitable for distribution and macOS may block it because it is unsigned. After copying `AeroPlay.app` to Applications, open it with Finder using Control-click > Open. If macOS still blocks this locally built app, run:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/AeroPlay.app"
+open "/Applications/AeroPlay.app"
+```
+
+`electron-builder` reads the standard macOS signing and notarization environment variables. Install a `Developer ID Application` certificate in Keychain, then configure your release environment, such as `CSC_LINK` and `CSC_KEY_PASSWORD` for the certificate, plus `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` for notarization. Do not commit certificates, passwords, or API keys.
+
+The build is intentionally configured with `forceCodeSigning`, so it fails instead of producing another DMG that Gatekeeper will reject.
+
+For a local Electron development run, use `npm start`.
 
 ## Features
 
@@ -21,7 +51,7 @@ A simple local video player that runs in Chrome without installation.
 1. Open Terminal in this folder and start the local web server:
 
 ```bash
-npm start
+npm run start:web
 ```
 
 2. Open [http://127.0.0.1:4173](http://127.0.0.1:4173) in Chrome.
