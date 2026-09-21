@@ -101,6 +101,7 @@ let embedRate = 1;
 let embedPipWindow = null;
 let youtubeQuality = "auto";
 let youtubeCaptionsEnabled = false;
+let youtubeCaptionsEnforceTimer = 0;
 const PLAYLIST_PREVIEW_WIDTH = 640;
 const PLAYLIST_PREVIEW_HEIGHT = 360;
 const TIMELINE_PREVIEW_CAPTURE_WIDTH = 640;
@@ -727,6 +728,8 @@ function renderPlaylist() {
 
       const thumbnailHtml = item.thumbnail
         ? `<img class="playlist-thumb" src="${item.thumbnail}" alt="Preview of ${escapeHtml(item.fileName)}" />`
+        : item.videoUrl
+          ? `<video class="playlist-thumb" src="${escapeHtml(item.videoUrl)}" muted autoplay loop playsinline preload="auto" aria-label="Preview of ${escapeHtml(item.fileName)}"></video>`
         : `<div class="playlist-thumb placeholder">No preview</div>`;
 
       mainButton.innerHTML = `
@@ -822,6 +825,21 @@ function updatePlaylistCard(index) {
       image.alt = `Preview of ${item.fileName}`;
       oldThumb.replaceWith(image);
     }
+  } else if (item.videoUrl) {
+    const oldThumb = card.querySelector(".playlist-thumb");
+    if (oldThumb && oldThumb.matches(".placeholder")) {
+      const preview = document.createElement("video");
+      preview.className = "playlist-thumb";
+      preview.src = item.videoUrl;
+      preview.muted = true;
+      preview.autoplay = true;
+      preview.loop = true;
+      preview.playsInline = true;
+      preview.preload = "auto";
+      preview.setAttribute("aria-label", `Preview of ${item.fileName}`);
+      oldThumb.replaceWith(preview);
+      preview.play().catch(() => {});
+    }
   }
 
   const existingDuration = card.querySelector(".playlist-duration");
@@ -856,15 +874,28 @@ function capturePreviewImage(videoElement, width, height) {
     return null;
   }
 
-  drawVideoFrameContain(context, videoElement, width, height);
-  return canvas.toDataURL("image/jpeg", 0.92);
+  try {
+    drawVideoFrameContain(context, videoElement, width, height);
+    return canvas.toDataURL("image/jpeg", 0.92);
+  } catch {
+    return null;
+  }
 }
 
 function createPreviewData(videoUrl) {
   return new Promise((resolve) => {
     const tempVideo = document.createElement("video");
-    tempVideo.preload = "metadata";
+    tempVideo.preload = "auto";
     tempVideo.muted = true;
+    tempVideo.autoplay = true;
+    tempVideo.loop = true;
+    tempVideo.playsInline = true;
+    tempVideo.style.position = "fixed";
+    tempVideo.style.width = "1px";
+    tempVideo.style.height = "1px";
+    tempVideo.style.opacity = "0";
+    tempVideo.style.pointerEvents = "none";
+    document.body.appendChild(tempVideo);
     tempVideo.src = videoUrl;
 
     let resolved = false;
@@ -875,6 +906,7 @@ function createPreviewData(videoUrl) {
       }
       resolved = true;
       window.clearTimeout(timeoutId);
+      tempVideo.remove();
       const duration = Number.isFinite(tempVideo.duration) ? tempVideo.duration : null;
       resolve({ thumbnail, duration });
     };
@@ -887,7 +919,13 @@ function createPreviewData(videoUrl) {
       finish(null);
     }, { once: true });
 
-    tempVideo.addEventListener("loadeddata", () => {
+    let previewReady = false;
+    const seekToPreviewFrame = () => {
+      if (previewReady) {
+        return;
+      }
+      previewReady = true;
+
       const duration = Number.isFinite(tempVideo.duration) ? tempVideo.duration : 0;
       const preferredSeek = clamp(duration * 0.24, 0, Math.max(0, Math.min(duration - 0.2, 10)));
 
@@ -901,11 +939,19 @@ function createPreviewData(videoUrl) {
       } catch {
         finish(capturePreviewImage(tempVideo, PLAYLIST_PREVIEW_WIDTH, PLAYLIST_PREVIEW_HEIGHT));
       }
-    }, { once: true });
+    };
+
+    tempVideo.addEventListener("loadedmetadata", seekToPreviewFrame, { once: true });
+    tempVideo.addEventListener("canplay", seekToPreviewFrame, { once: true });
 
     tempVideo.addEventListener("seeked", () => {
-      finish(capturePreviewImage(tempVideo, PLAYLIST_PREVIEW_WIDTH, PLAYLIST_PREVIEW_HEIGHT));
+      if (tempVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        finish(capturePreviewImage(tempVideo, PLAYLIST_PREVIEW_WIDTH, PLAYLIST_PREVIEW_HEIGHT));
+      }
     }, { once: true });
+
+    tempVideo.load();
+    tempVideo.play().catch(() => {});
   });
 }
 
@@ -1131,6 +1177,7 @@ function syncEmbedProgress() {
     return;
   }
 
+  enforceYouTubeCaptionsPreference();
   updateTimelineProgress();
   updatePlayPauseIcon();
 
@@ -1258,6 +1305,7 @@ function handleEmbedStateChange(event) {
     embedLoading.hidden = true;
   }
 
+  enforceYouTubeCaptionsPreference();
   syncEmbedSelection();
   updatePlayPauseIcon();
   updateTimelineProgress();
@@ -1303,6 +1351,8 @@ function closeEmbed() {
     return;
   }
 
+  window.clearTimeout(youtubeCaptionsEnforceTimer);
+  youtubeCaptionsEnforceTimer = 0;
   embedActive = false;
   embedRequest = null;
   embedRate = 1;
@@ -1414,6 +1464,8 @@ async function mountEmbedPlayer({
         }
         if (youtubeCaptionsEnabled) {
           applyYouTubeCaptions(true);
+        } else {
+          enforceYouTubeCaptionsPreference();
         }
 
         if (playlistIndex >= 0 && embedPlayer.getPlaylist?.()?.length) {
@@ -1436,6 +1488,7 @@ async function mountEmbedPlayer({
 
         embedRate = toFiniteNumber(embedPlayer.getPlaybackRate?.(), embedRate);
         embedPlayer.playVideo();
+        enforceYouTubeCaptionsPreference();
         startEmbedPolling();
         updateVolumeControls();
         updateSpeedButton();
@@ -1443,6 +1496,7 @@ async function mountEmbedPlayer({
         showControls();
       },
       onStateChange: handleEmbedStateChange,
+      onApiChange: enforceYouTubeCaptionsPreference,
       onPlaybackRateChange: (event) => {
         embedRate = toFiniteNumber(event.data, embedRate);
         updateSpeedButton();
@@ -1735,25 +1789,26 @@ function applyYouTubeCaptions(enabled) {
     return;
   }
 
-  if (enabled) {
-    embedPlayer.loadModule?.("captions");
-    window.setTimeout(() => {
-      if (!isEmbedPlayerReady() || !youtubeCaptionsEnabled) {
-        return;
-      }
-
-      embedPlayer.setOption?.("captions", "track", {
-        languageCode: "en",
-        kind: "asr"
-      });
-    }, 300);
-  } else {
-    embedPlayer.unloadModule?.("captions");
-  }
-  youtubeCaptionsEnabled = enabled;
+  embedPlayer.unloadModule?.("captions");
+  youtubeCaptionsEnabled = false;
   updateYouTubeCaptionsButton();
-  statusText.textContent = `Subtitles/CC: ${enabled ? "On" : "Off"}`;
+  statusText.textContent = "Subtitles/CC is disabled.";
   showControls();
+}
+
+function enforceYouTubeCaptionsPreference() {
+  window.clearTimeout(youtubeCaptionsEnforceTimer);
+  youtubeCaptionsEnforceTimer = 0;
+
+  if (isEmbedPlayerReady() && !youtubeCaptionsEnabled) {
+    embedPlayer.unloadModule?.("captions");
+    youtubeCaptionsEnforceTimer = window.setTimeout(() => {
+      youtubeCaptionsEnforceTimer = 0;
+      if (isEmbedPlayerReady() && !youtubeCaptionsEnabled) {
+        embedPlayer.unloadModule?.("captions");
+      }
+    }, 1000);
+  }
 }
 
 function updateYouTubeQualityButtons() {
@@ -1901,6 +1956,7 @@ function togglePlayPause() {
   }
 
   media.pause();
+  enforceYouTubeCaptionsPreference();
 }
 
 function applyPlaybackRate(speed) {
@@ -1940,6 +1996,7 @@ function seekVideoFromTimelinePointer(event) {
 
   const { time } = getTimelinePointerTime(event);
   media.currentTime = time;
+  enforceYouTubeCaptionsPreference();
   updateTimelineProgress();
 }
 
@@ -2142,7 +2199,7 @@ youtubeQualityMenu?.addEventListener("click", (event) => {
 });
 
 youtubeCaptionsButton?.addEventListener("click", () => {
-  applyYouTubeCaptions(!youtubeCaptionsEnabled);
+  applyYouTubeCaptions(false);
 });
 
 muteButton?.addEventListener("click", () => {
@@ -2560,6 +2617,7 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     showControls();
     media.currentTime = Math.max(0, media.currentTime - 10);
+    enforceYouTubeCaptionsPreference();
     statusText.textContent = `Seeked to ${formatDuration(media.currentTime)}`;
     updateTimelineProgress();
     return;
@@ -2572,6 +2630,7 @@ window.addEventListener("keydown", (event) => {
       ? media.duration
       : media.currentTime + 10;
     media.currentTime = Math.min(duration, media.currentTime + 10);
+    enforceYouTubeCaptionsPreference();
     statusText.textContent = `Seeked to ${formatDuration(media.currentTime)}`;
     updateTimelineProgress();
     return;
